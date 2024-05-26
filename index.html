@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title> CDB GUI</title>
+</head>
+<body>
+    <h1 class="text-center p-5 mb-5 text-3xl font-bold">
+      Chitra's Debugger
+      </h1>
+    <div class="mb-5 p-5">
+        <label for=""> PID to Debug</label>
+        <input type="text" id="pidInput" class="mb-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5  " placeholder="process id" required />
+        <button id="attchBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
+            Attach Process
+        </button>
+    </div>
+
+    <div class="p-5 md:grid grid-cols-12 gap-2">
+        <div class="col-span-6">
+            <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Command</label>
+            <textarea id="svrMsgInput" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
+                placeholder="insert server command"></textarea>
+            <button onclick="sendMessage()">
+                Send Message</button>
+        </div>
+        <div class="col-span-5">
+            <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Response</label>
+            <textarea id="svrMsgResp" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
+                placeholder=" server response"></textarea>
+        </div>
+    </div>
+
+    <script>
+        const svrMsgInput   = document.getElementById('svrMsgInput');
+        const svrMsgResp    = document.getElementById('svrMsgResp');
+        const pidInput      = document.getElementById('pidInput');
+        const attchBtn      = document.getElementById('attchBtn');
+        let isConnected     = false;
+
+        var ws = new WebSocket("ws://localhost:8080");
+
+        ws.onopen = function() {
+            console.log("Connection opened");
+            isConnected = true;
+        };
+        ws.onmessage = function(event) {
+            console.log(event);
+            svrMsgResp.innerText = event.data
+            try {
+                console.log("Received data: " + JSON.parse(event.data));
+            } catch (error) {
+                console.log("Received data: " + event.data);
+            }
+        };
+
+        ws.onclose = function() {
+            console.log("Connection closed");
+            isConnected = false;
+        };
+
+        attchBtn.onclick = () => attach()
+
+        function attach() 
+        {
+            const pid = pidInput.value;
+            if(pid && isConnected)
+            {
+                const command = JSON.stringify({
+                    command: "attach",
+                    args: {
+                        pid: pid
+                    }
+                })
+                ws.send(command);
+            }else{
+                console.log('pid not provided');
+            }
+        }
+
+        function sendMessage() {
+            if (ws.readyState === WebSocket.OPEN) {
+                console.log(svrMsgInput.value);
+                const message = {
+                    "command": "attach",
+                    "args": {
+                        "pid": "127"
+                    }
+                }
+                if(message){
+                    ws.send(JSON.stringify(message));
+                }else{
+                    ws.send("Default test message");
+                }
+            }
+        }
+    </script>
+</body>
+</html>

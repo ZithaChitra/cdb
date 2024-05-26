@@ -1,0 +1,8 @@
+build app
+    gcc -Wall -Og -o app app.c
+
+build bfviewer
+    gcc -Wall -Og -o bfviwer bfviewer.c
+
+build server
+    gcc -Wall -Og -o server server.c -lssl -lcrypto -lcjson

@@ -1,0 +1,23 @@
+// calling a __cdecl function
+
+1. Push Params onto the stack, from right to left
+    - the calling code must keep track of how many bytes
+        of parameters have been pushed onto the stack so 
+        it clean it up later.
+    
+2. Call the function
+    - the processor pushes the value of $eip onto the stack and the 
+        new value of $eip is the first byte after the `call` instruction.
+        The caller has now lost control and the callee is in charge.
+        This step does not change the value of %ebp
+
+3. Save and Update the %ebp
+    - 
+
+
+        // printf("data received--------\n");
+        // for (size_t i = 0; i < sizeof(buffer); i++)
+        // {
+        //     printf("%c", buffer[i]);
+        // }
+        // printf("\n");
