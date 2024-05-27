@@ -161,6 +161,7 @@ int startTracer(pid_t pid)
     for (size_t i = 0; i < total; i += sizeof(WORD))
     {
         fprintf(stdout, "value: %lx\n", *(traceeDataBuffer + i));
+        
     }
     
     detatch();
