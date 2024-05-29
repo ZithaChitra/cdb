@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <openssl/sha.h>
 #include <cjson/cJSON.h>
 #include <string.h>
@@ -14,9 +15,22 @@
 
 static struct pollfd epoll_events[MAX_IO_ENTITIES];
 static E_IO   *io_entities[MAX_IO_ENTITIES];
-static int epoll_fd;
+// static int epoll_fd;
 static int io_fds[MAX_IO_ENTITIES];
 static int io_curs = 0;
+
+void initEntIO(E_IO *io_ent, Handler_IO handler, char* type)
+{
+    if(io_ent == NULL || handler == NULL)
+    {
+        perror("initializeIOE: io_ent or handler not valid");
+        exit(EXIT_FAILURE);
+    }
+    io_ent->pos          = -1;
+    io_ent->sys_fd       = -1;
+    io_ent->type         = type == NULL ? "io_general" : type;
+    io_ent->eventHandler = handler;
+}
 
 int addnewIOEnt(E_IO *event)
 {
@@ -45,11 +59,11 @@ int removeIOEnt(E_IO *event)
 }
 
 // handle connected fd
-void connEventHandler(E_IO *io, struct pollfd *event)
+void connEventHandler(E_IO *io_con, struct pollfd *event)
 {
     printf("CLient event handler running\n");
     // do some error checking
-    E_IO_CONN *io_con = (E_IO_CONN*)io;
+    
     int client_socket = io_con->sys_fd;
     char buffer[BUFFER_SIZE];
 
@@ -141,11 +155,6 @@ void connEventHandler(E_IO *io, struct pollfd *event)
 
 void addFdToEpoll(E_IO *io)
 {
-    // if(!epoll_fd )
-    // {
-    //     perror("addFdToEpoll: epoll_fd not initialised");
-    //     exit(EXIT_FAILURE);
-    // }
     if(io == NULL)
     {
         perror("addFdToEpoll: fd not valid");
@@ -179,7 +188,7 @@ void init_ws_conn(int client_socket) {
         close(client_socket);
         return;
     }
-// #include <openssl/sha.h>
+
     char websocket_key[128];
     snprintf(websocket_key, key_end - key_start + 1, "%s", key_start);
 
@@ -208,21 +217,52 @@ void init_ws_conn(int client_socket) {
 
 void initEntIOConn(int sys_fd)
 {
-    E_IO_CONN con_io = {
-        .sys_fd = sys_fd,
-        .eventHandler = &connEventHandler
-    };
+    E_IO_CONN *con_io = (E_IO_CONN*)malloc(sizeof(E_IO_CONN));
+    // do some error checking
+    
+    initEntIO(&con_io->io, &connEventHandler, "io_connected_fd");
+    con_io->io.sys_fd = sys_fd;
     init_ws_conn(sys_fd);
 
-    if(addnewIOEnt((E_IO*)&con_io) == -1)
+    if(addnewIOEnt(&con_io->io) == -1)
     {
         perror("initEntIOConn: error saving new IOEnt");
         exit(EXIT_FAILURE);
     }
-    addFdToEpoll((E_IO *)&con_io);
-    printf("Client fd added to epoll. Index: %d\n", con_io.pos);
+    addFdToEpoll(&con_io->io);
+    printf("Client fd added to epoll. Index: %d\n", con_io->io.pos);
 }
 
+void servEventHandler(E_IO *io, struct pollfd *event)
+{
+    // do some error checking: bad
+    struct sockaddr_in clnt_sck;
+    socklen_t clnt_sck_size = sizeof(clnt_sck); 
+    int con = accept(io->sys_fd, (struct sockaddr *)&clnt_sck, &clnt_sck_size);
+    if(con == -1)
+    {
+        perror("servEventHandler: error connecting with client");
+        exit(EXIT_FAILURE);
+    }
+    initEntIOConn(con);
+    printf("server event handler done\n");
+}
+
+void genIOHandler(int index)
+{
+    fprintf(stdout, "------------------------\n");
+    fprintf(stdout, "io_index: %d\n", index);
+    E_IO *io = io_entities[index];
+    if(io != NULL)
+    {
+        fprintf(stdout, "sys_fd : %d\n", io->sys_fd);
+    }else{
+        fprintf(stdout, "index not set in io_index\n");
+    }
+    // fprintf(stdout, "event.fd: %d\n", event->fd);
+    fprintf(stdout, "------------------------\n");
+    return;
+}
 
 void initEntIOServ()
 {
@@ -248,51 +288,24 @@ void initEntIOServ()
         close(sys_fd);
         exit(EXIT_FAILURE);
     }
-    E_IO_SERV serv_io = {
-        .sys_fd = sys_fd,
-        .eventHandler = &servEventHandler
-    };
 
-    if(addnewIOEnt((E_IO*)&serv_io) == -1)
+    E_IO_SERV *serv_io = (E_IO_SERV*)malloc(sizeof(E_IO_SERV));
+    initEntIO(&serv_io->io, &servEventHandler, "io_listener_fd");
+    serv_io->io.sys_fd = sys_fd;
+
+    printf("listed fd set to: %d\n", serv_io->io.sys_fd);
+
+    if(addnewIOEnt(&serv_io->io) == -1)
     {
         perror("initEntIOServ: error saving new IOEnt");
         exit(EXIT_FAILURE);
     }
-    addFdToEpoll((E_IO*)&serv_io);
-    printf("Server fd added to epoll. index: %d\n", serv_io.pos);
+    addFdToEpoll((E_IO*)&serv_io->io);
+    printf("Server fd added to epoll. index: %d\n", serv_io->io.pos);
 }
-
-void servEventHandler(E_IO *io, struct pollfd *event)
-{
-    // do some error checking
-    struct sockaddr_in clnt_sck;
-    socklen_t clnt_sck_size = sizeof(clnt_sck); 
-    int con = accept(io->sys_fd, (struct sockaddr *)&clnt_sck, &clnt_sck_size);
-    if(con == -1)
-    {
-        perror("servEventHandler: error connecting with client");
-        exit(EXIT_FAILURE);
-    }
-    initEntIOConn(con);
-    printf("server event handler done\n");
-}
-
-
-void initEpoll()
-{
-    // epoll_fd = epoll_create(MAX_IO_ENTITIES);
-    // if(epoll_fd == -1)
-    // {
-    //     perror("initEpoll: error creating epoll instance");
-    //     exit(EXIT_FAILURE);
-    // }
-}
-
-
 
 void mainIO()
 {
-    initEpoll();
     initEntIOServ();
 
     int nfds;
@@ -310,9 +323,7 @@ void mainIO()
                     io->eventHandler(io, &epoll_events[i]);
                 }
             }
-
         }
-
     }
 }
 
