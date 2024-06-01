@@ -14,6 +14,7 @@
 #include "util.h"
 #include "tracer_bf.h"
 #include "actions.h"
+#include "json.h"
 
 static struct pollfd epoll_events[MAX_IO_ENTITIES];
 static E_IO   *io_entities[MAX_IO_ENTITIES];
@@ -107,22 +108,37 @@ void connEventHandler(E_IO *io_con, struct pollfd *event)
         }
     }
 
-    cJSON *json = cJSON_Parse((char *)payload);
+    JSON *json = json_from_string((char*)payload);
+    // cJSON *json = cJSON_Parse((char *)payload);
     if (json == NULL) {
         fprintf(stderr, "Error parsing JSON\n");
         return;
     }
 
-    cJSON *command = cJSON_GetObjectItemCaseSensitive(json, "command");
-    cJSON *args = cJSON_GetObjectItemCaseSensitive(json, "args");
-    HANDLER_CDB handler = action_handlers[0];
-    handler();
+    JSON *commad = json_get_value(json, "command");
+    JSON *args   = json_get_value(json, "args");
+
+    int action_id = commad->valueint;
+    if(action_id < UNKNOWN_ACTION)
+    {
+        printf("action id: %d\n", action_id);
+        HANDLER_CDB handler = action_handlers[action_id];
+        handler(args);
+    }
+    else
+    {
+        printf("action not recognized: %d\n", action_id);
+    }
+    // cJSON *command = cJSON_GetObjectItemCaseSensitive(json, "command");
+    // cJSON *args = cJSON_GetObjectItemCaseSensitive(json, "args");
+    // HANDLER_CDB handler = action_handlers[0];
+    // handler();
 
     // if (cJSON_IsString(command) && command->valuestring != NULL) {
     //     printf("Command: %s\n", command->valuestring);
     //     cJSON *arg = cJSON_GetObjectItemCaseSensitive(args, "pid");
     //     if(arg){
-    //         if (cJSON_IsString(arg)) {
+    //         if (cJSON_IsString( == 0arg)) {
     //             printf("(string) Arg %s: %s\n", arg->string, arg->valuestring);
     //             startTracer(atoi(arg->valuestring));
     //         } else if (cJSON_IsNumber(arg)) {
@@ -135,7 +151,9 @@ void connEventHandler(E_IO *io_con, struct pollfd *event)
     //     printf("Command: command is not string\n" );
     // }
 
-    cJSON_Delete(json);
+    // cJSON_Delete(json);
+    json_print(json);
+    json_delete(json);
     printf("Deleted Json object");
 
     // Echo the message back
