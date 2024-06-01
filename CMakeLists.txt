@@ -5,10 +5,13 @@ set(CMAKE_C_STANDARD 99)
 
 add_compile_options(-Wall -g)
 
-set(SOURCE_FILES bfviwer.c io.c server.c)
+include_directories("${PROJECT_SOURCE_DIR}/debugger")
 
-# Add the executable target
-add_executable(server ${SOURCE_FILES})
+add_subdirectory("server")
+add_subdirectory("debugger")
 
-# Link against the required libraries
-target_link_libraries(server ssl crypto cjson)
+add_library(main OBJECT main.c)
+
+add_executable(cdb $<TARGET_OBJECTS:main> $<TARGET_OBJECTS:server> $<TARGET_OBJECTS:debugger>)
+
+target_link_libraries(cdb server ssl crypto cjson)

@@ -1,0 +1,3 @@
+file(GLOB SERVER_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+
+add_library(server OBJECT ${SERVER_SRC_FILES})

@@ -12,12 +12,17 @@
 #include <poll.h>
 #include "io.h"
 #include "util.h"
+#include "tracer_bf.h"
+#include "actions.h"
 
 static struct pollfd epoll_events[MAX_IO_ENTITIES];
 static E_IO   *io_entities[MAX_IO_ENTITIES];
 // static int epoll_fd;
 static int io_fds[MAX_IO_ENTITIES];
 static int io_curs = 0;
+
+
+extern HANDLER_CDB action_handlers[];
 
 void initEntIO(E_IO *io_ent, Handler_IO handler, char* type)
 {
@@ -102,7 +107,6 @@ void connEventHandler(E_IO *io_con, struct pollfd *event)
         }
     }
 
-    // Handle JSON message
     cJSON *json = cJSON_Parse((char *)payload);
     if (json == NULL) {
         fprintf(stderr, "Error parsing JSON\n");
@@ -111,23 +115,25 @@ void connEventHandler(E_IO *io_con, struct pollfd *event)
 
     cJSON *command = cJSON_GetObjectItemCaseSensitive(json, "command");
     cJSON *args = cJSON_GetObjectItemCaseSensitive(json, "args");
+    HANDLER_CDB handler = action_handlers[0];
+    handler();
 
-    if (cJSON_IsString(command) && command->valuestring != NULL) {
-        printf("Command: %s\n", command->valuestring);
-        cJSON *arg = cJSON_GetObjectItemCaseSensitive(args, "pid");
-        if(arg){
-            if (cJSON_IsString(arg)) {
-                printf("(string) Arg %s: %s\n", arg->string, arg->valuestring);
-                // startTracer(atoi(arg->valuestring));
-            } else if (cJSON_IsNumber(arg)) {
-                printf("(number) Arg %s: %lf\n", arg->string, arg->valuedouble);
-            }
-        }else{
-            printf("arg is null 'startTracer' not called\n" );
-        }
-    }else{
-        printf("Command: command is not string\n" );
-    }
+    // if (cJSON_IsString(command) && command->valuestring != NULL) {
+    //     printf("Command: %s\n", command->valuestring);
+    //     cJSON *arg = cJSON_GetObjectItemCaseSensitive(args, "pid");
+    //     if(arg){
+    //         if (cJSON_IsString(arg)) {
+    //             printf("(string) Arg %s: %s\n", arg->string, arg->valuestring);
+    //             startTracer(atoi(arg->valuestring));
+    //         } else if (cJSON_IsNumber(arg)) {
+    //             printf("(number) Arg %s: %lf\n", arg->string, arg->valuedouble);
+    //         }
+    //     }else{
+    //         printf("arg is null 'startTracer' not called\n" );
+    //     }
+    // }else{
+    //     printf("Command: command is not string\n" );
+    // }
 
     cJSON_Delete(json);
     printf("Deleted Json object");

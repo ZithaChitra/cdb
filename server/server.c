@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <errno.h>
 #include <cjson/cJSON.h>
-#include "bfviwer.h"
+#include "tracer_bf.h"
 #include "io.h"
 
 #define MAX_EVENTS 10
@@ -18,7 +18,7 @@
 #define BUFFER_SIZE 1024
 
 
-int main() {
+int sys_start() {
     printf("updated server has started\n");
     mainIO();
     return 0;

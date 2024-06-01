@@ -92,7 +92,6 @@ void tracerRead(pid_t traceePid, unsigned long long startAddr, void *data, size_
     size_t i  = 0, nw = 0; // next-word
     WORD *ptr = (WORD *)data;
 
-
     for (; i < len; i++, nw += sizeof(WORD), word = 0)
     {
         if((word = ptrace(PTRACE_PEEKTEXT, traceePid, startAddr + i, NULL)) == -1)
