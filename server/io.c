@@ -15,12 +15,15 @@
 #include "tracer_bf.h"
 #include "actions.h"
 #include "json.h"
+#include "cdb.h"
+#include "signalcdb.h"
 
 static struct pollfd epoll_events[MAX_IO_ENTITIES];
 static E_IO   *io_entities[MAX_IO_ENTITIES];
 // static int epoll_fd;
 static int io_fds[MAX_IO_ENTITIES];
 static int io_curs = 0;
+CDB *cdb_main;
 
 
 extern HANDLER_CDB action_handlers[];
@@ -108,72 +111,46 @@ void connEventHandler(E_IO *io_con, struct pollfd *event)
         }
     }
 
+    // JSON *json = cdb_exec_action(cdb, (char*)payload);
     JSON *json = json_from_string((char*)payload);
-    // cJSON *json = cJSON_Parse((char *)payload);
+    char *resp_str = NULL;
+    printf("updated print\n");
+    json_print(json);
+    // // // cJSON *json = cJSON_Parse((char *)payload);
     if (json == NULL) {
         fprintf(stderr, "Error parsing JSON\n");
         return;
+    }else{
+        cdb_exec_action(cdb_main, json, &resp_str);
     }
-
-    JSON *commad = json_get_value(json, "command");
-    JSON *args   = json_get_value(json, "args");
-
-    int action_id = commad->valueint;
-    if(action_id < UNKNOWN_ACTION)
-    {
-        printf("action id: %d\n", action_id);
-        HANDLER_CDB handler = action_handlers[action_id];
-        handler(args);
-    }
-    else
-    {
-        printf("action not recognized: %d\n", action_id);
-    }
-    // cJSON *command = cJSON_GetObjectItemCaseSensitive(json, "command");
-    // cJSON *args = cJSON_GetObjectItemCaseSensitive(json, "args");
-    // HANDLER_CDB handler = action_handlers[0];
-    // handler();
-
-    // if (cJSON_IsString(command) && command->valuestring != NULL) {
-    //     printf("Command: %s\n", command->valuestring);
-    //     cJSON *arg = cJSON_GetObjectItemCaseSensitive(args, "pid");
-    //     if(arg){
-    //         if (cJSON_IsString( == 0arg)) {
-    //             printf("(string) Arg %s: %s\n", arg->string, arg->valuestring);
-    //             startTracer(atoi(arg->valuestring));
-    //         } else if (cJSON_IsNumber(arg)) {
-    //             printf("(number) Arg %s: %lf\n", arg->string, arg->valuedouble);
-    //         }
-    //     }else{
-    //         printf("arg is null 'startTracer' not called\n" );
-    //     }
-    // }else{
-    //     printf("Command: command is not string\n" );
-    // }
 
     // cJSON_Delete(json);
-    json_print(json);
-    json_delete(json);
+    if(json != NULL) json_delete(json);
+    // json_delete(json);
     printf("Deleted Json object");
+    if(resp_str == NULL) resp_str = "something went wrong";
+    uint64_t resp_length = strlen(resp_str);
+
 
     // Echo the message back
     unsigned char response_frame[BUFFER_SIZE];
     response_frame[0] = 0x81; // FIN bit set and text frame opcode (0x1)
-    if (payload_length <= 125) {
-        response_frame[1] = (unsigned char)payload_length;
+    if (resp_length <= 125) {
+        response_frame[1] = (unsigned char)resp_length;
         offset = 2;
-    } else if (payload_length <= 65535) {
+    } else if (resp_length <= 65535) {
         response_frame[1] = 126;
-        *(uint16_t *)(response_frame + 2) = htons((uint16_t)payload_length);
+        *(uint16_t *)(response_frame + 2) = htons((uint16_t)resp_length);
         offset = 4;
     } else {
         response_frame[1] = 127;
-        *(uint64_t *)(response_frame + 2) = htobe64(payload_length);
+        *(uint64_t *)(response_frame + 2) = htobe64(resp_length);
         offset = 10;
     }
     fprintf(stdout, "Sending Back Payload\n");
-    memcpy(response_frame + offset, payload, payload_length);
-    send(client_socket, response_frame, offset + payload_length, 0);
+    memcpy(response_frame + offset, resp_str, resp_length);
+    send(client_socket, response_frame, offset + resp_length, 0);
+    // if(resp_str != NULL) free(resp_str);
 
 }
 
@@ -331,6 +308,14 @@ void initEntIOServ()
 void mainIO()
 {
     initEntIOServ();
+    cdb_main = cdb_init();
+    if (cdb_main == NULL)
+    {
+        printf("cdb: could not initialize bebugger\n");
+    }else{
+        printf("cdb: initialized bebugger\n");
+    }
+    init_signal_handlers(cdb_main);
 
     int nfds;
     for (;;)

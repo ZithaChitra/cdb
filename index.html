@@ -11,9 +11,14 @@
     <div class="mb-5 p-5">
         <label for=""> PID to Debug</label>
         <input type="text" id="pidInput" class="mb-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5  " placeholder="process id" required />
-        <button id="attchBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
-            Attach Process
-        </button>
+        <div class="flex">
+            <button id="attchBtn" type="button" class="bg-blue-500 p-1 mr-10 rounded text-white flex items-center">
+                Attach Process
+            </button>
+            <button id="getRegsBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
+                Get Regs
+            </button>
+        </div>
     </div>
 
     <div class="p-5 md:grid grid-cols-12 gap-2">
@@ -36,6 +41,7 @@
         const svrMsgResp    = document.getElementById('svrMsgResp');
         const pidInput      = document.getElementById('pidInput');
         const attchBtn      = document.getElementById('attchBtn');
+        const getRegsBtn    = document.getElementById('getRegsBtn');
         let isConnected     = false;
 
         var ws = new WebSocket("ws://localhost:8080");
@@ -48,9 +54,10 @@
             console.log(event);
             svrMsgResp.innerText = event.data
             try {
-                console.log("Received data: " + JSON.parse(event.data));
+                console.log("Received data parsed: ");
+                console.log(JSON.parse(event.data));
             } catch (error) {
-                console.log("Received data: " + event.data);
+                console.log("Received data not parsed: ");
             }
         };
 
@@ -59,7 +66,8 @@
             isConnected = false;
         };
 
-        attchBtn.onclick = () => attach()
+        attchBtn.onclick = () => attach();
+        getRegsBtn.onclick = () => getProcRegs();
 
         function attach() 
         {
@@ -67,11 +75,33 @@
             if(pid && isConnected)
             {
                 const command = JSON.stringify({
-                    command: 0,
-                    args: {
-                        pid: pid
+                    "actid": 0,
+                    "args": {
+                        "pid":  parseInt(pid) 
                     }
                 })
+                console.log("sending args: ", command);
+
+                ws.send(command);
+            }else{
+                console.log('pid not provided');
+            }
+        }
+
+
+        function getProcRegs()
+        {
+            const pid = pidInput.value;
+            if(pid && isConnected)
+            {
+                const command = JSON.stringify({
+                    "actid": 2,
+                    "args": {
+                        "pid":  parseInt(pid) 
+                    }
+                })
+                console.log("sending args: ", command);
+
                 ws.send(command);
             }else{
                 console.log('pid not provided');
@@ -82,9 +112,9 @@
             if (ws.readyState === WebSocket.OPEN) {
                 console.log(svrMsgInput.value);
                 const message = {
-                    "command": "attach",
+                    "actid": 0,
                     "args": {
-                        "pid": "127"
+                        "pid": 0
                     }
                 }
                 if(message){

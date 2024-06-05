@@ -1,19 +1,13 @@
 #ifndef CDB_HANDLERS_GENERIC
 #define CDB_HANDLERS_GENERIC
 
+#include <sys/types.h>
 #include "json.h"
-#include "sys/types.h"
+#include "cdb.h"
 
-/*
-    resp = {
-        "pid":          pid,        - pid for which the action was called
-        "action_id":    aid,        - action handler id
-        "result":       json result - return value = { data: null|some-value }
-    }
-*/
-
-int get_regs();
+int proc_attach(CDB *cdb, JSON *args, char **resp_str);
+int proc_detach(CDB *cdb, JSON *args, char **resp_str);
+int proc_get_regs(CDB *cdb, JSON *args, char **resp_str);
 int no_action();
-int attach_process(JSON *args);
 
 #endif
