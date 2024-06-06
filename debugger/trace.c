@@ -6,7 +6,12 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include "trace.h"
+
+#ifndef WORD
+#define WORD long
+#endif
 
 int _trace_attach(pid_t pid)
 {
@@ -59,3 +64,63 @@ struct user_regs_struct *_trace_proc_get_regs(pid_t pid)
     }
     return regs;
 }
+
+unsigned long long _trace_find_exec_addr(pid_t pid)
+{
+    if(!pid)
+    {
+        perror("executableAddr: pid not privided");
+        exit(EXIT_FAILURE);
+    }
+
+    FILE *f;
+    char fileName[100];
+    char line[1024];
+    char perms[50];
+    unsigned long address = 0;
+    char str[20];
+
+    sprintf(fileName, "/proc/%d/maps", pid);
+
+    if((f = fopen(fileName, "r")) == NULL)
+    {
+        perror("executableAddr: could not open proc 'map' file");
+        exit(1);
+    }
+
+    while(fgets(line, sizeof(line), f) != NULL)
+    {
+        sscanf(line, "%lx-%*lx %s %*s %s %*d", &address, perms, str);
+        printf("%s", line);
+        if(strstr(line, "x") != NULL){
+            break;
+        }
+    } 
+    fclose(f);
+    return address;
+}
+
+void _trace_proc_mem_read(pid_t pid, unsigned long long start_addr, void *data, size_t len)
+{
+    if((!pid) || (!start_addr) || (!data) || (!len))
+    {
+        perror("traceeRead: too few args provided");
+        exit(EXIT_FAILURE);
+    }
+     
+    long word = 0;
+    size_t i  = 0, nw = 0; // next-word
+    WORD *ptr = (WORD *)data;
+
+    for (; i < len; i++, word = 0)
+    {
+        if((word = ptrace(PTRACE_PEEKTEXT, pid, start_addr + i, NULL)) == -1)
+        {
+            perror("[x] traceeRead: error reading from memory");
+            exit(EXIT_FAILURE);
+        }
+        *(ptr + (i * sizeof(WORD))) = word;
+    }
+    return;
+}
+

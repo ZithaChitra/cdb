@@ -25,7 +25,9 @@ typedef enum cdb_actions{
     PROC_ATTACH = 0,        // - 0
     PROC_DETACH,            // - 1
     PROC_GET_REGS,          // - 2
-    UNKNOWN_ACTION,         // - 3
+    PROC_MEM_READ,          // - 3
+    PROC_MEM_WRITE,         // - 4
+    UNKNOWN_ACTION,         // - 5
 } CDB_ACTIONS;
 
 #endif

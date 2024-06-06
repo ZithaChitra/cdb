@@ -15,6 +15,9 @@ int _trace_detach(pid_t pid);
 int _trace_is_proc_attached(pid_t pid);
 struct user_regs_struct *_trace_proc_get_regs(pid_t pid);
 
+unsigned long long _trace_find_exec_addr(pid_t pid);
+void _trace_proc_mem_read(pid_t pid, unsigned long long start_addr, 
+    void *data, size_t len);
 
 
 #endif

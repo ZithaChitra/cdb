@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/user.h>
+#include <string.h>
 #include <stdlib.h>
 #include "generic.h"
 #include "cdb.h"
@@ -91,7 +92,6 @@ int proc_attach(CDB *cdb, JSON *args, char **resp_str)
         proc_delete(proc);
         return -1;
     }
-
     printf("attach_process handler finish\n");
     printf("---------------------\n\n");
 
@@ -161,8 +161,76 @@ int proc_get_regs(CDB *cdb, JSON *args, char **resp_str)
     return -1;
 }
 
+int proc_mem_read(CDB *cdb, JSON *args, char **resp_str)
+{
+    
+    printf("-------------------------------\n");
+    printf("generic: action handler: proc_mem_read\n");
+    if (cdb  == NULL || args  == NULL) return -1;
+    JSON *pid = json_get_value(args, "pid");
+    if (pid == NULL)
+    {
+        printf("process id not provided. no regs\n");
+        return -1;
+    }
+    int proc_exists = cdb_has_proc(cdb, pid->valueint);
+    if(!proc_exists) return -1;
+    long read_size = 5;
+    unsigned long mem_buffer[5024];
+    unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
+    _trace_proc_mem_read(pid->valueint, exec_addr, mem_buffer, read_size);
+    char str_val[20];
+    char *resp = (char *)malloc(read_size * (sizeof(char) * 20)); 
+    if(resp == NULL) return -1;
+    resp[0] = '\0';
+
+    for (size_t i = 0; i < read_size; i++)
+    {
+        fprintf(stdout, "value: %lx\n", *(mem_buffer + (i * sizeof(unsigned long))));
+        snprintf(str_val, sizeof(str_val), "0x%lx,", *(mem_buffer + (i * sizeof(unsigned long))));
+        strcat(resp, str_val);
+    }
+
+    printf("%s\n", resp);
+    *resp_str = resp;
+
+    // // Calculate the required size for the final string
+    // size_t total_length = 1; // Start with 1 for the null terminator
+    // for (size_t i = 0; i < read_size; ++i) {
+    //     total_length += snprintf(NULL, 0, "%lx", mem_buffer[i]) + 1; // +1 for the comma or null terminator
+    // }
+
+    // // Allocate memory for the final string
+    // char *final_str = malloc(total_length);
+    // if (final_str == NULL) {
+    //     fprintf(stderr, "Memory allocation failed.\n");
+    //     return EXIT_FAILURE;
+    // }
+
+    // // Build the final comma-separated string
+    // final_str[0] = '\0'; // Initialize the final string
+    // for (size_t i = 0; i < read_size; ++i) {
+    //     char buffer[20];
+    //     snprintf(buffer, sizeof(buffer), "%lx", mem_buffer[i]);
+    //     strcat(final_str, buffer);
+    //     if (i < read_size - 1) {
+    //         strcat(final_str, ",");
+    //     }
+    // }
+    // *resp_str = final_str;
+    
+    printf("generic: action handler: proc_mem_read\n");
+    printf("-------------------------------\n\n");
+    return 0;
+}
+
+int proc_mem_write(CDB *cdb, JSON *args, char **resp_str)
+{
+    if (cdb  == NULL || args  == NULL) return -1;
+    return 0;
+}
+
 int no_action()
 {
     return 0;
 }
-

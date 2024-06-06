@@ -18,6 +18,9 @@
             <button id="getRegsBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
                 Get Regs
             </button>
+            <button id="readMemBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
+                Read Mem
+            </button>
         </div>
     </div>
 
@@ -42,6 +45,7 @@
         const pidInput      = document.getElementById('pidInput');
         const attchBtn      = document.getElementById('attchBtn');
         const getRegsBtn    = document.getElementById('getRegsBtn');
+        const readMemBtn    = document.getElementById('readMemBtn');
         let isConnected     = false;
 
         var ws = new WebSocket("ws://localhost:8080");
@@ -68,6 +72,7 @@
 
         attchBtn.onclick = () => attach();
         getRegsBtn.onclick = () => getProcRegs();
+        readMemBtn.onclick = () => readMem();
 
         function attach() 
         {
@@ -81,7 +86,6 @@
                     }
                 })
                 console.log("sending args: ", command);
-
                 ws.send(command);
             }else{
                 console.log('pid not provided');
@@ -101,7 +105,25 @@
                     }
                 })
                 console.log("sending args: ", command);
+                ws.send(command);
+            }else{
+                console.log('pid not provided');
+            }
+        }
 
+
+        function readMem()
+        {
+            const pid = pidInput.value;
+            if(pid && isConnected)
+            {
+                const command = JSON.stringify({
+                    "actid": 3,
+                    "args": {
+                        "pid":  parseInt(pid) 
+                    }
+                })
+                console.log("sending args: ", command);
                 ws.send(command);
             }else{
                 console.log('pid not provided');
