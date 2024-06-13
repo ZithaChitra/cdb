@@ -18,16 +18,17 @@
         "args":     json args   - action handler arguments
     }
 */
-
 typedef int (*HANDLER_CDB)(CDB *cdb, JSON *args, char **resp_str);
 
 typedef enum cdb_actions{
-    PROC_ATTACH = 0,        // - 0
-    PROC_DETACH,            // - 1
-    PROC_GET_REGS,          // - 2
-    PROC_MEM_READ,          // - 3
-    PROC_MEM_WRITE,         // - 4
-    UNKNOWN_ACTION,         // - 5
+    PROC_START_DBG = 0,         // - 0
+    PROC_END_DBG,               // - 1
+    PROC_REGS_READ,             // - 2
+    PROC_REGS_WRITE,            // - 3
+    PROC_MEM_READ,              // - 4
+    PROC_MEM_WRITE,             // - 5
+    PROC_STEP_SINGLE,           // - 6
+    UNKNOWN_ACTION,             // - 7
 } CDB_ACTIONS;
 
 #endif

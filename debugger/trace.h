@@ -9,6 +9,9 @@
  * APIs
 */
 
+int _trace_proc_start(char *procpath);
+int _trace_proc_cont_kill(pid_t pid);
+int _trace_proc_step_single(pid_t pid);
 int _trace_attach(pid_t pid);
 int _trace_detach(pid_t pid);
 

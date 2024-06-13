@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <title> CDB GUI</title>
 </head>
@@ -8,45 +9,108 @@
     <h1 class="text-center p-5 mb-5 text-3xl font-bold">
       Chitra's Debugger
       </h1>
-    <div class="mb-5 p-5">
-        <label for=""> PID to Debug</label>
-        <input type="text" id="pidInput" class="mb-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5  " placeholder="process id" required />
-        <div class="flex">
-            <button id="attchBtn" type="button" class="bg-blue-500 p-1 mr-10 rounded text-white flex items-center">
-                Attach Process
-            </button>
-            <button id="getRegsBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
-                Get Regs
-            </button>
-            <button id="readMemBtn" type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
-                Read Mem
-            </button>
+    <div class="grid grid-cols-12">
+        <div class="mb-5 p-5 col-span-8">
+            <div>
+                <div>
+                    <label for=""> proc path</label>
+                    <input type="text" id="procpath" class="mb-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5  " placeholder="process path" required />
+                </div>
+                
+                <div>
+                    <label for=""> PID to Debug</label>
+                    <input type="text" id="pidInput" class="mb-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5  " placeholder="process id" required />
+                </div>
+            </div>
+
+            <div class="flex">
+                <button id="startDbgBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                    start debugging
+                </button>
+                <button id="getRegsBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                    Get Regs
+                </button>
+                <button id="nextBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                    Next i
+                </button>
+                <button id="readMemBtn" disabled type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
+                    Read Mem
+                </button>
+            </div>
+            <div class=" md:grid grid-cols-12 gap-2">
+                <div class="col-span-6">
+                    <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Command</label>
+                    <textarea id="svrMsgInput" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
+                        placeholder="insert server command"></textarea>
+                    <button onclick="sendMessage()">
+                        Send Message</button>
+                </div>
+                <div class="col-span-5">
+                    <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Response</label>
+                    <textarea id="svrMsgResp" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
+                        placeholder=" server response"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="col-span-4">
+            <div class="border rounded p-1">
+                <h3 class="mb-2">Registers</h3>
+                <div x-data >
+                    <template 
+                        x-for="(reg, key) in $store.proc.regs">
+                        <div class="grid grid-cols-6">
+                            <p class="col-span-2" x-text="key"></p>
+                            <p class="col-span-4 border" x-text="reg"></p>
+                        </div>
+                </template>
+                </div>
+            </div>
+
         </div>
     </div>
 
-    <div class="p-5 md:grid grid-cols-12 gap-2">
-        <div class="col-span-6">
-            <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Command</label>
-            <textarea id="svrMsgInput" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
-                placeholder="insert server command"></textarea>
-            <button onclick="sendMessage()">
-                Send Message</button>
-        </div>
-        <div class="col-span-5">
-            <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Response</label>
-            <textarea id="svrMsgResp" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
-                placeholder=" server response"></textarea>
-        </div>
-    </div>
 
     <script>
         const svrMsgInput   = document.getElementById('svrMsgInput');
         const svrMsgResp    = document.getElementById('svrMsgResp');
         const pidInput      = document.getElementById('pidInput');
-        const attchBtn      = document.getElementById('attchBtn');
+        const procpathIpt   = document.getElementById('procpath');
         const getRegsBtn    = document.getElementById('getRegsBtn');
         const readMemBtn    = document.getElementById('readMemBtn');
+        const startDbgBtn   = document.getElementById('startDbgBtn');
+        const nextBtn       = document.getElementById('nextBtn');
+
+        const actions = {
+            PROC_START_DBG          : 0,
+            PROC_END_DBG            : 1,             // - 1
+            PROC_REGS_READ          : 2,             // - 2
+            PROC_REGS_WRITE         : 3,             // - 3
+            PROC_MEM_READ           : 4,             // - 4
+            PROC_MEM_WRITE          : 5,             // - 5
+            PROC_STEP_SINGLE        : 6,             // - 6
+            UNKNOWN_ACTION          : 7,             // - 7
+        }
+        const msg_handlers = [
+            proc_start_dbg,
+            proc_end_dbg,
+            proc_regs_read,
+            proc_mem_read,
+        ];
+
         let isConnected     = false;
+        let proc = {};
+
+
+        document.addEventListener('alpine:init', () => {
+            console.log('alpine initiatedc');
+            Alpine.store('proc', {
+                pid: null,
+                regs: {"rax": "0980980"},
+            })
+            proc = Alpine.store('proc');
+            proc.pid = 99;
+            console.log(Alpine.store('proc'), proc);
+        })
 
         var ws = new WebSocket("ws://localhost:8080");
 
@@ -59,7 +123,12 @@
             svrMsgResp.innerText = event.data
             try {
                 console.log("Received data parsed: ");
-                console.log(JSON.parse(event.data));
+                event = JSON.parse(event.data);
+                if('actid' in event){
+                    const handler = msg_handlers[event['actid']];
+                    handler(event);
+                }
+                console.log(event);
             } catch (error) {
                 console.log("Received data not parsed: ");
             }
@@ -69,56 +138,112 @@
             console.log("Connection closed");
             isConnected = false;
         };
+        
 
-        attchBtn.onclick = () => attach();
-        getRegsBtn.onclick = () => getProcRegs();
-        readMemBtn.onclick = () => readMem();
+        getRegsBtn.onclick  = () => proc_regs_read();
+        readMemBtn.onclick  = () => proc_mem_read();
+        startDbgBtn.onclick = () => proc_start_dbg();
+        nextBtn.onclick     = () => proc_step_single();
 
-        function attach() 
+        function proc_start_dbg(event = null)
         {
-            const pid = pidInput.value;
-            if(pid && isConnected)
+            if(!event)
             {
-                const command = JSON.stringify({
-                    "actid": 0,
-                    "args": {
-                        "pid":  parseInt(pid) 
-                    }
-                })
-                console.log("sending args: ", command);
-                ws.send(command);
-            }else{
-                console.log('pid not provided');
+                const path = procpathIpt.value;
+                if(path && isConnected)
+                {
+                    const command = JSON.stringify({
+                        "actid": actions.PROC_START_DBG,
+                        "args": {
+                            "path": "demo" 
+                        }
+                    })
+                    console.log("sending args: ", command);
+                    ws.send(command);
+                }else{
+                    console.log('pid not provided');
+                }
+                return;
+            }
+            if('resp' in event && 'pid' in event['resp'])
+            {
+                proc.pid = event['resp']['pid'];
+                // pidInput.value = proc.pid;
+                console.log("pid set: ", proc);
+            }
+        }
+
+        function proc_end_dbg()
+        {
+
+        }
+
+
+        function proc_step_single(event = null)
+        {
+            if(!event)
+            {
+                const pid = proc.pid;
+                if(pid && isConnected)
+                {
+                    const command = JSON.stringify({
+                        "actid": actions.PROC_STEP_SINGLE,
+                        "args": {
+                            "pid":  parseInt(pid) 
+                        }
+                    })
+                    console.log("sending args: ", command);
+                    ws.send(command);
+                }else{
+                    console.log('pid not provided');
+                }
+                return;
+            }  
+            if('resp' in event && 'regs' in event['resp'])
+            {
+                proc.regs = event['resp']['regs'];
+                console.log("regs: ", proc);
             }
         }
 
 
-        function getProcRegs()
+
+        function proc_regs_read(event = null)
         {
-            const pid = pidInput.value;
-            if(pid && isConnected)
+            if(!event)
             {
-                const command = JSON.stringify({
-                    "actid": 2,
-                    "args": {
-                        "pid":  parseInt(pid) 
-                    }
-                })
-                console.log("sending args: ", command);
-                ws.send(command);
-            }else{
-                console.log('pid not provided');
+                const pid = proc.pid;
+                if(pid && isConnected)
+                {
+                    const command = JSON.stringify({
+                        "actid": actions.PROC_REGS_READ,
+                        "args": {
+                            "pid":  parseInt(pid) 
+                        }
+                    })
+                    console.log("sending args: ", command);
+                    ws.send(command);
+                }else{
+                    console.log('pid not provided');
+                }
+                return;
             }
+            if('resp' in event && 'regs' in event['resp'])
+            {
+                proc.regs = event['resp']['regs'];
+                console.log("regs: ", proc);
+            }
+
         }
 
 
-        function readMem()
+        function proc_mem_read()
         {
             const pid = pidInput.value;
             if(pid && isConnected)
             {
                 const command = JSON.stringify({
-                    "actid": 3,
+                    "actid": actions.PROC_MEM_READ,
                     "args": {
                         "pid":  parseInt(pid) 
                     }

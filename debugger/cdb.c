@@ -44,7 +44,7 @@ void cdb_delete()
         printf("removing pid: %d\n", proc->pid);
         if (_trace_is_proc_attached(proc->pid))
         {
-           _trace_detach(proc->pid);
+           _trace_proc_cont_kill(proc->pid);
         }
         free(proc);
     }
@@ -88,6 +88,7 @@ JSON *cdb_exec_action(CDB *cdb, JSON *action, char **resp_str)
     int action_id = actid->valueint;
     if(action_id < UNKNOWN_ACTION)
     {
+        cJSON_AddNumberToObject(args, "actid", action_id);
         printf("action id: %d\n", action_id);
         HANDLER_CDB handler = action_handlers[action_id];
         handler(cdb, args, resp_str);
