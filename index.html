@@ -94,7 +94,10 @@
             proc_start_dbg,
             proc_end_dbg,
             proc_regs_read,
+            proc_regs_write,
             proc_mem_read,
+            proc_mem_write,
+            proc_step_single,
         ];
 
         let isConnected     = false;
@@ -106,31 +109,36 @@
             Alpine.store('proc', {
                 pid: null,
                 regs: {"rax": "0980980"},
+
+                update_regs: (regs) => {
+                    console.log("update_regs: start------");
+                    console.log("update_regs: end------");
+                },
             })
             proc = Alpine.store('proc');
             proc.pid = 99;
-            console.log(Alpine.store('proc'), proc);
         })
 
-        var ws = new WebSocket("ws://localhost:8080");
+        const ws = new WebSocket("ws://localhost:8080");
 
         ws.onopen = function() {
             console.log("Connection opened");
             isConnected = true;
         };
         ws.onmessage = function(event) {
-            console.log(event);
+            // console.log(event);
             svrMsgResp.innerText = event.data
             try {
-                console.log("Received data parsed: ");
-                event = JSON.parse(event.data);
+                const isObject = typeof event.data == "object";
+                event = isObject ? event.data : JSON.parse(event.data)
+                console.log("parsed data: ", event);
                 if('actid' in event){
                     const handler = msg_handlers[event['actid']];
                     handler(event);
                 }
                 console.log(event);
             } catch (error) {
-                console.log("Received data not parsed: ");
+                console.log("Received data not parsed: ", error);
             }
         };
 
@@ -158,18 +166,17 @@
                             "path": "demo" 
                         }
                     })
-                    console.log("sending args: ", command);
+                    // console.log("sending args: ", command);
                     ws.send(command);
                 }else{
-                    console.log('pid not provided');
+                    // console.log('pid not provided');
                 }
                 return;
             }
             if('resp' in event && 'pid' in event['resp'])
             {
                 proc.pid = event['resp']['pid'];
-                // pidInput.value = proc.pid;
-                console.log("pid set: ", proc);
+                // console.log("pid set: ", proc);
             }
         }
 
@@ -192,20 +199,20 @@
                             "pid":  parseInt(pid) 
                         }
                     })
-                    console.log("sending args: ", command);
+                    // console.log("sending args: ", command);
                     ws.send(command);
                 }else{
                     console.log('pid not provided');
                 }
                 return;
             }  
+            console.log('proc_step_single');
             if('resp' in event && 'regs' in event['resp'])
             {
+                console.log('handling new regs');
                 proc.regs = event['resp']['regs'];
-                console.log("regs: ", proc);
             }
         }
-
 
 
         function proc_regs_read(event = null)
@@ -236,6 +243,10 @@
 
         }
 
+        function proc_regs_write()
+        {
+
+        }
 
         function proc_mem_read()
         {
@@ -255,6 +266,12 @@
             }
         }
 
+        function proc_mem_write()
+        {
+
+        }
+
+        
         function sendMessage() {
             if (ws.readyState === WebSocket.OPEN) {
                 console.log(svrMsgInput.value);
