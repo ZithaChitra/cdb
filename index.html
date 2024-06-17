@@ -33,7 +33,10 @@
                 <button id="nextBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     Next i
                 </button>
-                <button id="readMemBtn" disabled type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
+                <button id="allFuncsBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                    All Funcs
+                </button>
+                <button id="readMemBtn"  type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
                     Read Mem
                 </button>
             </div>
@@ -65,7 +68,19 @@
                 </template>
                 </div>
             </div>
+            <div class="border rounded p-1">
+                <h3 class="mb-2">All Functions</h3>
+                <div x-data>
+                    <template
+                        x-for="(func, key) in $store.proc.funcs">
+                        <div class="grid grid-cols-6">
+                            <p class="col-span-2" x-text="func.func_name"></p>
+                            <p class="col-span-4 border" x-text="func.low_pc"></p>
+                        </div>
+                    </template>
+                </div>
 
+            </div>
         </div>
     </div>
 
@@ -79,16 +94,19 @@
         const readMemBtn    = document.getElementById('readMemBtn');
         const startDbgBtn   = document.getElementById('startDbgBtn');
         const nextBtn       = document.getElementById('nextBtn');
+        const allFuncsBtn   = document.getElementById('allFuncsBtn');
 
         const actions = {
-            PROC_START_DBG          : 0,
+            PROC_START_DBG          : 0,             // - 0
             PROC_END_DBG            : 1,             // - 1
             PROC_REGS_READ          : 2,             // - 2
             PROC_REGS_WRITE         : 3,             // - 3
             PROC_MEM_READ           : 4,             // - 4
             PROC_MEM_WRITE          : 5,             // - 5
             PROC_STEP_SINGLE        : 6,             // - 6
-            UNKNOWN_ACTION          : 7,             // - 7
+            PROC_FUNC_ALL           : 7,             // - 7
+            PROC_FUNC_SINGLE        : 8,             // - 8
+            UNKNOWN_ACTION          : 9,             // - 9
         }
         const msg_handlers = [
             proc_start_dbg,
@@ -98,6 +116,8 @@
             proc_mem_read,
             proc_mem_write,
             proc_step_single,
+            proc_func_all,
+            proc_func_single
         ];
 
         let isConnected     = false;
@@ -109,6 +129,11 @@
             Alpine.store('proc', {
                 pid: null,
                 regs: {"rax": "0980980"},
+                funcs: {},
+                mem: {
+                    buffer:     [],
+                    col_keys:   [],
+                },
 
                 update_regs: (regs) => {
                     console.log("update_regs: start------");
@@ -134,6 +159,7 @@
                 console.log("parsed data: ", event);
                 if('actid' in event){
                     const handler = msg_handlers[event['actid']];
+                    console.log(handler);
                     handler(event);
                 }
                 console.log(event);
@@ -146,12 +172,12 @@
             console.log("Connection closed");
             isConnected = false;
         };
-        
 
         getRegsBtn.onclick  = () => proc_regs_read();
         readMemBtn.onclick  = () => proc_mem_read();
         startDbgBtn.onclick = () => proc_start_dbg();
         nextBtn.onclick     = () => proc_step_single();
+        allFuncsBtn.onclick = () => proc_func_all();
 
         function proc_start_dbg(event = null)
         {
@@ -248,25 +274,117 @@
 
         }
 
-        function proc_mem_read()
+        function base64ToUint8Array(base64) 
         {
-            const pid = pidInput.value;
-            if(pid && isConnected)
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            // return bytes;
+            const hexArray = [];
+            for (const byte of bytes) {
+                const hex = byte.toString(16).padStart(2, '0');
+                hexArray.push(hex);
+            }
+
+            return hexArray;
+        }
+
+        function mem_row_keys(total, col_max = 16)
+        {
+            console.log(`total: ${total}, col_max: ${col_max}`);
+            if(col_max > total) return [{
+                col_start: 0,
+                col_end: total
+            }]
+            let keys = [];
+            const rows_max = Math.ceil(total / col_max);
+            let start_index = 0, end_index = start_index + (col_max - 1); 
+            for(let i = 0; i < rows_max; i++)
             {
-                const command = JSON.stringify({
-                    "actid": actions.PROC_MEM_READ,
-                    "args": {
-                        "pid":  parseInt(pid) 
-                    }
-                })
-                console.log("sending args: ", command);
-                ws.send(command);
-            }else{
-                console.log('pid not provided');
+                keys.push({
+                    col_start: start_index,
+                    col_end: end_index
+                });
+                start_index = end_index + 1;
+                end_index = start_index + col_max;
+            }
+            return keys;
+        }
+
+        function proc_mem_read(event = null)
+        {
+            if(!event)
+            {
+                const pid = proc.pid;
+                if(pid && isConnected)
+                {
+                    const command = JSON.stringify({
+                        "actid": actions.PROC_MEM_READ,
+                        "args": {
+                            "pid":  parseInt(pid) 
+                        }
+                    })
+                    console.log("sending args: ", command);
+                    ws.send(command);
+                }else{
+                    console.log('pid not provided');
+                }
+                return;
+            }
+            if('resp' in event && 'mem' in event['resp'])
+            {
+                const mem = event['resp']['mem'];
+                const len = event['resp']['len'];
+                const bytes_arr   = base64ToUint8Array(mem);
+                const keys        = mem_row_keys(len)
+                proc.mem.buffer   = bytes_arr;
+                proc.mem.col_keys = keys;
+                console.log("mem[]: ", mem);
+                console.log("bytes[]: ", bytes_arr);
+                console.log("keys[]: ", keys);
             }
         }
 
         function proc_mem_write()
+        {
+
+        }
+
+
+        function proc_func_all(event = null)
+        {
+            if(!event)
+            {
+                const pid = proc.pid;
+                if(pid && isConnected)
+                {
+                    const command = JSON.stringify({
+                        "actid": actions.PROC_FUNC_ALL,
+                        "args": {
+                            "pid":  parseInt(pid) 
+                        }
+                    })
+                    console.log("sending args: ", command);
+                    ws.send(command);
+                }else{
+                    console.log('pid not provided');
+                }
+                return;
+            }
+            if('resp' in event && 'funcs' in event['resp'])
+            {
+                console.log("setting funcs handler");
+                const funcs = event['resp']['funcs'];
+                proc.funcs = funcs;
+                console.log("all funcs: ", funcs);
+            }else{
+                console.log("invalid args");
+            }
+        }
+        function proc_func_single()
         {
 
         }

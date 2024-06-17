@@ -3,10 +3,14 @@
 #include <sys/user.h>
 #include <string.h>
 #include <stdlib.h>
+#include <libdwarf/dwarf.h>
+#include <libdwarf/libdwarf.h>
+#include <sys/uio.h>
 #include "generic.h"
 #include "cdb.h"
 #include "json.h"
 #include "trace.h"
+#include "resolve.h"
 
 
 JSON *init_handler_resp(pid_t *pid)
@@ -24,10 +28,8 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
     printf("proc path: %s\n", procpath->valuestring);
     pid_t pid = _trace_proc_start(procpath->valuestring);
     printf("started process: %d\n", pid);
-    if(pid == -1)
-    {
-        return -1;
-    }
+    if(pid == -1) return -1;
+
     int pathlen = strlen(procpath->valuestring);
     char *path = (char *)malloc(pathlen);
     if(path == NULL) return -1;
@@ -39,6 +41,28 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
         return -1;
     }
 
+    proc->src = fopen("demo", "rb");
+    if(proc->src == NULL)
+    {
+        _trace_proc_cont_kill(pid);
+        proc_delete(proc);
+        printf("could not open debug file\n");
+        return -1;
+    }else{
+        printf("openned file\n");
+    }
+
+    Dwarf_Error err;
+    if(dwarf_init(fileno(proc->src), DW_DLC_READ, NULL, 
+        NULL, &proc->dw_dbg, &err) != DW_DLV_OK)
+    {
+        _trace_proc_cont_kill(pid);
+        proc_delete(proc);
+        printf("could not init debug info\n");
+        return -1;
+    }else{
+        printf("initiated debug info\n");
+    }
     int status = cdb_add_proc(cdb, proc);
     if(status == -1)
     {
@@ -73,7 +97,6 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
 
 int proc_end_dbg(CDB *cdb, JSON *args, char **resp_str)
 {
-
     printf("\n\nproc_end handler start\n");
 
     if(cdb == NULL)
@@ -102,7 +125,6 @@ int proc_end_dbg(CDB *cdb, JSON *args, char **resp_str)
     printf("process not found on cdb\n");
     return -1;
 }
-
 
 int proc_regs_read(CDB *cdb, JSON *args, char **resp_str)
 {
@@ -185,12 +207,38 @@ int proc_regs_read(CDB *cdb, JSON *args, char **resp_str)
 
 int proc_regs_write(CDB *cdb, JSON *args, char **resp_str)
 {
+    return 0;
 
+}
+
+void base64_encode_(const unsigned char *input, int length, char *output) {
+    const char *base64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int i = 0, j = 0;
+    while (length > 2) {
+        output[j++] = base64_table[input[i] >> 2];
+        output[j++] = base64_table[((input[i] & 0x03) << 4) | (input[i + 1] >> 4)];
+        output[j++] = base64_table[((input[i + 1] & 0x0f) << 2) | (input[i + 2] >> 6)];
+        output[j++] = base64_table[input[i + 2] & 0x3f];
+        length -= 3;
+        i += 3;
+    }
+    if (length != 0) {
+        output[j++] = base64_table[input[i] >> 2];
+        if (length > 1) {
+            output[j++] = base64_table[((input[i] & 0x03) << 4) | (input[i + 1] >> 4)];
+            output[j++] = base64_table[(input[i + 1] & 0x0f) << 2];
+            output[j++] = '=';
+        } else {
+            output[j++] = base64_table[(input[i] & 0x03) << 4];
+            output[j++] = '=';
+            output[j++] = '=';
+        }
+    }
+    output[j] = '\0';
 }
 
 int proc_mem_read(CDB *cdb, JSON *args, char **resp_str)
 {
-    
     printf("-------------------------------\n");
     printf("generic: action handler: proc_mem_read\n");
     if (cdb  == NULL || args  == NULL) return -1;
@@ -202,49 +250,42 @@ int proc_mem_read(CDB *cdb, JSON *args, char **resp_str)
     }
     int proc_exists = cdb_has_proc(cdb, pid->valueint);
     if(!proc_exists) return -1;
-    long read_size = 5;
+    long read_size = 96;
     unsigned long mem_buffer[5024];
     unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
-    _trace_proc_mem_read(pid->valueint, exec_addr, mem_buffer, read_size);
-    char str_val[20];
-    char *resp = (char *)malloc(read_size * (sizeof(char) * 20)); 
-    if(resp == NULL) return -1;
-    resp[0] = '\0';
+    struct iovec *local_v;
+    local_v = _trace_proc_mem_read(pid->valueint, exec_addr, read_size);
+    if(local_v == NULL) return -1;
+    char mem_encoded[read_size * 4 / 3 + 4];
 
-    for (size_t i = 0; i < read_size; i++)
+    base64_encode_(local_v->iov_base, read_size, mem_encoded);
+    free(local_v->iov_base);
+    free(local_v);
+
+    JSON *resp = json_init("empty", NULL);
+    if(resp == NULL)
     {
-        fprintf(stdout, "value: %lx\n", *(mem_buffer + (i * sizeof(unsigned long))));
-        snprintf(str_val, sizeof(str_val), "0x%lx,", *(mem_buffer + (i * sizeof(unsigned long))));
-        strcat(resp, str_val);
+        printf("could not allocate memory for response\n");
+        return 1;
     }
 
-    printf("%s\n", resp);
-    *resp_str = resp;
+    JSON *resp_ = json_init("empty", NULL);
+    if(resp_ == NULL)
+    {
+        printf("could not allocate memory for response\n");
+        json_delete(resp);
+        return 1;
+    }
 
-    // // Calculate the required size for the final string
-    // size_t total_length = 1; // Start with 1 for the null terminator
-    // for (size_t i = 0; i < read_size; ++i) {
-    //     total_length += snprintf(NULL, 0, "%lx", mem_buffer[i]) + 1; // +1 for the comma or null terminator
-    // }
+    JSON *action = json_get_value(args, "actid");
+    cJSON_AddNumberToObject(resp, "actid", action->valueint);
 
-    // // Allocate memory for the final string
-    // char *final_str = malloc(total_length);
-    // if (final_str == NULL) {
-    //     fprintf(stderr, "Memory allocation failed.\n");
-    //     return EXIT_FAILURE;
-    // }
+    cJSON_AddStringToObject(resp_, "mem", mem_encoded);
+    cJSON_AddNumberToObject(resp_, "len", read_size);
+    cJSON_AddItemToObject(resp, "resp", resp_);
 
-    // // Build the final comma-separated string
-    // final_str[0] = '\0'; // Initialize the final string
-    // for (size_t i = 0; i < read_size; ++i) {
-    //     char buffer[20];
-    //     snprintf(buffer, sizeof(buffer), "%lx", mem_buffer[i]);
-    //     strcat(final_str, buffer);
-    //     if (i < read_size - 1) {
-    //         strcat(final_str, ",");
-    //     }
-    // }
-    // *resp_str = final_str;
+    *resp_str = cJSON_PrintUnformatted(resp);
+    json_delete(resp);
     
     printf("generic: action handler: proc_mem_read\n");
     printf("-------------------------------\n\n");
@@ -267,6 +308,86 @@ int proc_step_single(CDB *cdb, JSON *args, char **resp_str)
     return proc_regs_read(cdb, args, resp_str);
 }
 
+int proc_func_all(CDB *cdb, JSON *args, char **resp_str)
+{
+    printf("-------------------------------\n");
+    printf("generic: action handler: proc_func_all\n");
+    if (cdb  == NULL || args  == NULL) return -1;
+    JSON *pid = json_get_value(args, "pid");
+    if (pid == NULL)
+    {
+        printf("process id not provided. no regs\n");
+        return -1;
+    }
+    int proc_exists = cdb_has_proc(cdb, pid->valueint);
+    if(!proc_exists) return -1;
+    PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
+    if(proc == NULL)  
+    {
+        printf("process object not found\n");
+        return -1;
+    }
+    
+    FUNC_INFO *funcs = NULL;
+    int funcs_total;
+    func_find_all(proc->dw_dbg, &funcs, &funcs_total);
+    printf("total functions: %d\n", funcs_total);
+    if(funcs == NULL) return -1;
+
+    JSON *resp = json_init("empty", NULL);
+    if(resp == NULL) 
+    {
+        free(funcs);
+        printf("(resp) could not allocate memory for response\n");
+        return -1;
+    }
+
+    JSON *resp_ = json_init("empty", NULL);
+    if(resp_ == NULL) 
+    {
+        free(funcs);
+        json_delete(resp);
+        printf("(resp_) could not allocate memory for response\n");
+        return -1;
+    }
+    JSON *funcs_json = json_init("empty", NULL);
+    if(funcs_json == NULL)
+    {
+        printf("(funcs) could not allocate memory for response\n");
+        free(funcs);
+        json_delete(resp);
+        return 1;
+    }
+    for (size_t i = 0; i < funcs_total; i++)
+    {
+        FUNC_INFO *func_info = (funcs + i);
+        func_info_print(func_info);
+        JSON *func = json_init("empty", NULL);
+        if(func)
+        {
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "0x%llx", func_info->low_pc);
+            cJSON_AddStringToObject(func, "func_name", func_info->func_name);
+            cJSON_AddStringToObject(func, "low_pc", buffer);
+            cJSON_AddItemToObject(funcs_json, func_info->func_name, func);
+        }
+    }
+
+    JSON *action = json_get_value(args, "actid");
+    cJSON_AddNumberToObject(resp, "actid", action->valueint);
+
+    cJSON_AddItemToObject(resp_, "funcs", funcs_json);
+    cJSON_AddItemToObject(resp, "resp", resp_);
+
+    *resp_str = cJSON_PrintUnformatted(resp);
+    json_delete(resp);
+    return 0;
+}
+
+int proc_func_single(CDB *cdb, JSON *args, char **resp_str)
+{
+    return 0;
+}
 
 int no_action()
 {

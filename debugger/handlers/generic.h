@@ -12,6 +12,8 @@ int proc_regs_write(CDB *cdb, JSON *args, char **resp_str);
 int proc_mem_read(CDB *cdb, JSON *args, char **resp_str);
 int proc_mem_write(CDB *cdb, JSON *args, char **resp_str);
 int proc_step_single(CDB *cdb, JSON *args, char **resp_str);
+int proc_func_all(CDB *cdb, JSON *args, char **resp_str);
+int proc_func_single(CDB *cdb, JSON *args, char **resp_str);
 int no_action();
 
 #endif

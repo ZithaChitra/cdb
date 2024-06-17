@@ -9,5 +9,7 @@ HANDLER_CDB action_handlers[] = {
     (HANDLER_CDB)proc_mem_read,
     (HANDLER_CDB)proc_mem_write,
     (HANDLER_CDB)proc_step_single,
+    (HANDLER_CDB)proc_func_all,
+    (HANDLER_CDB)proc_func_single,
     (HANDLER_CDB)no_action,
 };

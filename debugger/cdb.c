@@ -1,6 +1,8 @@
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <libdwarf/dwarf.h>
+#include <libdwarf/libdwarf.h>
 
 #include "actions.h"
 #include "trace.h"
@@ -13,13 +15,26 @@ PROCESS *proc_init(pid_t pid)
 {
     PROCESS *proc = (PROCESS *)malloc(sizeof(PROCESS));
     if(proc == NULL) return NULL;
-    proc->pid = pid;
+    proc->pid    = pid;
+    proc->src    = NULL;
+    proc->dw_dbg = 0;
     return proc;
 }
 
 void proc_delete(PROCESS *proc)
 {
     if(proc == NULL) return;
+    if(proc->dw_dbg)
+    {
+        Dwarf_Error err;
+        if(dwarf_finish(proc->dw_dbg, &err) != DW_DLV_OK)
+        {
+            fprintf(stderr, "proc_delete: error in dwarf finidh: %s\n",
+                dwarf_errmsg(err));
+            dwarf_dealloc(proc->dw_dbg, err, DW_DLA_ERROR);
+        }
+    }
+    if(proc->src) fclose(proc->src);
     free(proc);
 }
 
@@ -27,14 +42,12 @@ CDB *cdb_init()
 {
     CDB *cdb = (CDB *)malloc(sizeof(CDB)); 
     if(cdb == NULL) return NULL;
-
     cdb->proc_curs = 0;
     return cdb;
 }
 
 void cdb_delete()
 {
-    printf("\n\n----------------------\n");
     printf("------cdb_delete start------------------\n");
     if(cdb_main == NULL) return;
     for (size_t i = 0; i < cdb_main->proc_curs; i++)
@@ -46,11 +59,10 @@ void cdb_delete()
         {
            _trace_proc_cont_kill(proc->pid);
         }
-        free(proc);
+        proc_delete(proc);
     }
     free(cdb_main);
     printf("------cdb_delete end------------------\n");
-    printf("----------------------\n\n");
     exit(EXIT_SUCCESS);
 } 
 
@@ -112,6 +124,20 @@ int cdb_has_proc(CDB *cdb, pid_t pid)
     }
     return 0;
 }
+
+PROCESS *cdb_find_proc(CDB *cdb, pid_t pid)
+{
+    if(cdb == NULL) return NULL;
+    PROCESS *proc = NULL;
+    for (size_t i = 0; i < cdb->proc_curs; i++)
+    {
+        proc = cdb->all_proc[i];
+        if(proc == NULL) continue;
+        if(proc->pid == pid) return proc;
+    }
+    return NULL;
+}
+
 int cdb_add_proc(CDB *cdb, PROCESS *proc)
 {
     if(cdb->proc_curs < MAX_PROC)

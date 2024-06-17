@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
@@ -8,6 +9,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/uio.h>
 #include "trace.h"
 
 #ifndef WORD
@@ -27,7 +29,6 @@ int _trace_proc_start(char *procpath)
     {
         printf("_trace_start_proc: could not fock\n ");
         return -1;
-
     }else if(pid == 0)
     {
         printf("child: requesting trace me\n");
@@ -51,17 +52,7 @@ int _trace_proc_start(char *procpath)
     }else{
         printf("parent: waiting for child\n");
         waitpid(pid, &status, 0);
-        // if(ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
-        // {
-        //     printf("error continuing tracee from child process\n");
-        // }
 
-        // /*
-        //     - here i want to attach to proc created by execv
-        //     - set breakpoint at some_function addr & run
-        // */
-
-        // waitpid(pid, &status, 0);
         return pid;
     }
     return -1;
@@ -194,27 +185,35 @@ unsigned long long _trace_find_exec_addr(pid_t pid)
     return address;
 }
 
-void _trace_proc_mem_read(pid_t pid, unsigned long long start_addr, void *data, size_t len)
+struct iovec *_trace_proc_mem_read(pid_t pid, unsigned long long addr, size_t len)
 {
-    if((!pid) || (!start_addr) || (!data) || (!len))
+    if(pid && addr && len) 
     {
-        perror("traceeRead: too few args provided");
-        exit(EXIT_FAILURE);
-    }
-     
-    long word = 0;
-    size_t i  = 0, nw = 0; // next-word
-    WORD *ptr = (WORD *)data;
-
-    for (; i < len; i++, word = 0)
-    {
-        if((word = ptrace(PTRACE_PEEKTEXT, pid, start_addr + i, NULL)) == -1)
+        char *local_buff = (char *)malloc(len);
+        if(local_buff == NULL) return NULL;
+        struct iovec *local_v = (struct iovec *)malloc(sizeof(struct iovec));
+        if(local_v == NULL)
         {
-            perror("[x] traceeRead: error reading from memory");
-            exit(EXIT_FAILURE);
+            free(local_buff);
+            return NULL;
         }
-        *(ptr + (i * sizeof(WORD))) = word;
+        local_v->iov_base = local_buff;
+        local_v->iov_len = len;
+
+        struct iovec remote_v = {
+            .iov_base = (void *)addr,
+            .iov_len  = len
+        };
+        ssize_t nread = process_vm_readv(pid, local_v, 1, &remote_v, 1, 0);
+        if(nread == -1)
+        {
+            printf("_trace_proc_mem_read: error rading tracee mem\n");
+            free(local_v);
+            free(local_buff);
+            return NULL;
+        }
+        return local_v;
     }
-    return;
+    return NULL;
 }
 
