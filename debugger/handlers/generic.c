@@ -12,14 +12,47 @@
 #include "trace.h"
 #include "resolve.h"
 
+// action handler
+#define ACT_HANDLR_START(handler_name)\
+    int handler_name(CDB *cdb, JSON *args, char **resp_str) \
+    {   \
+        if(cdb == NULL || args == NULL) return -1;  \
+        JSON *action = json_get_value(args, "actid"); \
+        JSON *pid = json_get_value(args, "pid");    \
+        if (pid == NULL)    \
+        {   \
+            fprintf(stderr, "process id not provided.\n");  \
+            return -1;  \
+        }   \
+        int proc_exists = cdb_has_proc(cdb, pid->valueint); \
+        JSON *resp = json_init("empty", NULL);  \
+        if(resp == NULL)    \
+        {   \
+            fprintf(stderr, "could not allocate memory for response json.\n"); \
+            return -1; \
+        }   \
+        cJSON_AddNumberToObject(resp, "actid", action->valueint);   \
+        JSON *resp_ = json_init("empty", NULL); \
+        if(resp_ == NULL)   \
+        {   \
+            printf("could not allocate memory for response data\n"); \
+            json_delete(resp);  \
+            return -1;  \
+        }   \
+        cJSON_AddItemToObject(resp, "resp", resp_); \
 
-JSON *init_handler_resp(pid_t *pid)
-{
-    JSON *resp = json_init("empty", NULL);
-    json_add_val(resp, "number", "pid", pid);
-    json_add_val(resp, "string", "status", "succuess");
-    return resp;
-}
+
+#define ACT_HANDLR_END \
+        *resp_str = cJSON_PrintUnformatted(resp); \
+        printf("%s\n", *resp_str);  \
+        printf("-------------------------------\n");  \
+        json_delete(resp);  \
+        return 0;   \
+        failure:    \
+            json_delete(resp);  \
+            return -1;   \
+    }   \
+
 
 int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
 {
@@ -97,7 +130,6 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
 
 int proc_end_dbg(CDB *cdb, JSON *args, char **resp_str)
 {
-    printf("\n\nproc_end handler start\n");
 
     if(cdb == NULL)
     {
@@ -126,84 +158,41 @@ int proc_end_dbg(CDB *cdb, JSON *args, char **resp_str)
     return -1;
 }
 
-int proc_regs_read(CDB *cdb, JSON *args, char **resp_str)
-{
-    printf("-------------------------------\n");
-    printf("generic: action handler: get_regs\n");
-    if(cdb == NULL || args == NULL) return -1;
-    JSON *pid = json_get_value(args, "pid");
-    if (pid == NULL)
+ACT_HANDLR_START(proc_regs_read)
+    if(!proc_exists) return -1;
+    struct user_regs_struct *regs = _trace_proc_get_regs(pid->valueint);
+    if(regs == NULL) goto failure;
+    JSON *regs_json = json_init("empty", NULL);
+    if(regs_json == NULL)
     {
-        printf("process id not provided. no regs\n");
-        return -1;
-    }
-    int proc_exists = cdb_has_proc(cdb, pid->valueint);
-    if(proc_exists)
-    {
-        struct user_regs_struct *regs = _trace_proc_get_regs(pid->valueint);
-        if(regs == NULL) return -1;
-        JSON *resp = json_init("empty", NULL);
-        if(resp == NULL)
-        {
-            printf("could not allocate memory for response\n");
-            free(regs);
-            return 1;
-        }
-        JSON *regs_json = json_init("empty", NULL);
-        if(regs_json == NULL)
-        {
-            printf("could not allocate memory for response\n");
-            free(regs);
-            json_delete(resp);
-            return 1;
-        }
-        JSON *resp_ = json_init("empty", NULL);
-        if(resp_ == NULL)
-        {
-            printf("could not allocate memory for response\n");
-            free(regs);
-            json_delete(resp);
-            json_delete(regs_json);
-            return 1;
-        }
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rip", regs->rip);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rsp", regs->rsp);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rbp", regs->rbp);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rax", regs->rax);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rbx", regs->rbx);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rcx", regs->rcx);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rdx", regs->rdx);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rsi", regs->rsi);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "rdi", regs->rdi);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r8",  regs->r8);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r9",  regs->r9);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r10", regs->r10);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r11", regs->r11);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r12", regs->r12);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r13", regs->r13);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r14", regs->r14);
-        cJSON_AddNumberToObject((cJSON *)regs_json, "r15", regs->r15);
-
-        JSON *action = json_get_value(args, "actid");
-        cJSON_AddNumberToObject(resp, "actid", action->valueint);
-
-        cJSON_AddNumberToObject(resp_, "pid", pid->valueint);
-        cJSON_AddItemToObject((cJSON *)resp_, "regs", regs_json);
-
-        cJSON_AddItemToObject(resp, "resp", resp_);
-
-        // cJSON_AddIte
-        *resp_str = cJSON_PrintUnformatted(resp);
-        printf("%s\n", *resp_str);
-        printf("-------------------------------\n\n");
-        
-        json_delete(resp);
+        printf("could not allocate memory for response\n");
         free(regs);
-        return 0;
+        goto failure;
     }
-    printf("-------------------------------\n\n");
-    return -1;
-}
+
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rip", regs->rip);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rsp", regs->rsp);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rbp", regs->rbp);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rax", regs->rax);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rbx", regs->rbx);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rcx", regs->rcx);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rdx", regs->rdx);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rsi", regs->rsi);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rdi", regs->rdi);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r8",  regs->r8);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r9",  regs->r9);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r10", regs->r10);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r11", regs->r11);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r12", regs->r12);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r13", regs->r13);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r14", regs->r14);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r15", regs->r15);
+
+    cJSON_AddNumberToObject(resp_, "pid", pid->valueint);
+    cJSON_AddItemToObject((cJSON *)resp_, "regs", regs_json);
+
+    free(regs);
+ACT_HANDLR_END
 
 int proc_regs_write(CDB *cdb, JSON *args, char **resp_str)
 {
@@ -237,60 +226,28 @@ void base64_encode_(const unsigned char *input, int length, char *output) {
     output[j] = '\0';
 }
 
-int proc_mem_read(CDB *cdb, JSON *args, char **resp_str)
-{
-    printf("-------------------------------\n");
-    printf("generic: action handler: proc_mem_read\n");
-    if (cdb  == NULL || args  == NULL) return -1;
-    JSON *pid = json_get_value(args, "pid");
-    if (pid == NULL)
-    {
-        printf("process id not provided. no regs\n");
-        return -1;
-    }
-    int proc_exists = cdb_has_proc(cdb, pid->valueint);
+
+ACT_HANDLR_START(proc_mem_read)
+    printf("generic: (updated) proc_mem_read\n");
     if(!proc_exists) return -1;
     long read_size = 96;
     unsigned long mem_buffer[5024];
     unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
     struct iovec *local_v;
     local_v = _trace_proc_mem_read(pid->valueint, exec_addr, read_size);
-    if(local_v == NULL) return -1;
     char mem_encoded[read_size * 4 / 3 + 4];
+    if(local_v == NULL)
+    {
+        goto failure;
+    }
 
     base64_encode_(local_v->iov_base, read_size, mem_encoded);
     free(local_v->iov_base);
     free(local_v);
 
-    JSON *resp = json_init("empty", NULL);
-    if(resp == NULL)
-    {
-        printf("could not allocate memory for response\n");
-        return 1;
-    }
-
-    JSON *resp_ = json_init("empty", NULL);
-    if(resp_ == NULL)
-    {
-        printf("could not allocate memory for response\n");
-        json_delete(resp);
-        return 1;
-    }
-
-    JSON *action = json_get_value(args, "actid");
-    cJSON_AddNumberToObject(resp, "actid", action->valueint);
-
     cJSON_AddStringToObject(resp_, "mem", mem_encoded);
     cJSON_AddNumberToObject(resp_, "len", read_size);
-    cJSON_AddItemToObject(resp, "resp", resp_);
-
-    *resp_str = cJSON_PrintUnformatted(resp);
-    json_delete(resp);
-    
-    printf("generic: action handler: proc_mem_read\n");
-    printf("-------------------------------\n\n");
-    return 0;
-}
+ACT_HANDLR_END
 
 int proc_mem_write(CDB *cdb, JSON *args, char **resp_str)
 {
@@ -304,7 +261,6 @@ int proc_step_single(CDB *cdb, JSON *args, char **resp_str)
     JSON *pid = json_get_value(args, "pid");
     if(pid == NULL) return -1;
     if (_trace_proc_step_single(pid->valueint) == -1) return -1;
-    printf("ran single step: calling - proc_regs_read");
     return proc_regs_read(cdb, args, resp_str);
 }
 
@@ -377,9 +333,9 @@ int proc_func_all(CDB *cdb, JSON *args, char **resp_str)
     cJSON_AddNumberToObject(resp, "actid", action->valueint);
 
     cJSON_AddItemToObject(resp_, "funcs", funcs_json);
-    cJSON_AddItemToObject(resp, "resp", resp_);
+cJSON_AddItemToObject(resp, "resp", resp_);
 
-    *resp_str = cJSON_PrintUnformatted(resp);
+*resp_str = cJSON_PrintUnformatted(resp);
     json_delete(resp);
     return 0;
 }

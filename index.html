@@ -6,11 +6,11 @@
     <title> CDB GUI</title>
 </head>
 <body class="bg-gray-900 text-white">
-    <h1 class="text-center p-5 mb-5 text-3xl font-bold">
+    <h1 class="text-center py-1  mb-2 text-lg font-bold border-b">
       Chitra's Debugger
       </h1>
-    <div class="grid grid-cols-12">
-        <div class="mb-5 p-5 col-span-8">
+    <div class="grid grid-cols-12 gap-2 px-4">
+        <div class="mb-5 col-span-3">
             <div>
                 <div>
                     <label for=""> proc path</label>
@@ -23,40 +23,49 @@
                 </div>
             </div>
 
-            <div class="flex">
-                <button id="startDbgBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+            <div class="">
+                <button id="startDbgBtn" type="button" class="w-full mb-1 bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     start debugging
                 </button>
-                <button id="getRegsBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                <button id="getRegsBtn" type="button" class="w-full  mb-1 bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     Get Regs
                 </button>
-                <button id="nextBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                <button id="nextBtn" type="button" class="w-full  mb-1 bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     Next i
                 </button>
-                <button id="allFuncsBtn" type="button" class="bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                <button id="allFuncsBtn" type="button" class="w-full mb-1  bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     All Funcs
                 </button>
-                <button id="readMemBtn"  type="button" class="bg-blue-500 p-1 rounded text-white flex items-center">
+                <button id="readMemBtn"  type="button" class="w-full bg-blue-500 p-1 rounded text-white flex items-center">
                     Read Mem
                 </button>
             </div>
-            <div class=" md:grid grid-cols-12 gap-2">
-                <div class="col-span-6">
-                    <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Command</label>
-                    <textarea id="svrMsgInput" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
-                        placeholder="insert server command"></textarea>
-                    <button onclick="sendMessage()">
-                        Send Message</button>
-                </div>
-                <div class="col-span-5">
-                    <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Response</label>
-                    <textarea id="svrMsgResp" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
-                        placeholder=" server response"></textarea>
+            <div >
+                <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Response</label>
+                <textarea id="svrMsgResp" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
+                    placeholder=" server response"></textarea>
+            </div>
+        </div>
+        <div class="col-span-6">
+            <div class="border rounded p-1">
+                <h3 class="mb-2">Memory</h3>
+                <div x-data>
+                    <template
+                        x-for="(row, key) in $store.proc.mem.col_keys">
+                        <div class="">
+                            <div class="flex justify-between">
+                                <template 
+                                    x-for="col in row.keys">
+                                    <p x-text="$store.proc.mem.buffer[col]" class="col-span-1"></p>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
-        <div class="col-span-4">
-            <div class="border rounded p-1">
+        <div class="col-span-3">
+            <div class="border rounded p-1 mb-2">
                 <h3 class="mb-2">Registers</h3>
                 <div x-data >
                     <template 
@@ -79,7 +88,6 @@
                         </div>
                     </template>
                 </div>
-
             </div>
         </div>
     </div>
@@ -151,7 +159,6 @@
             isConnected = true;
         };
         ws.onmessage = function(event) {
-            // console.log(event);
             svrMsgResp.innerText = event.data
             try {
                 const isObject = typeof event.data == "object";
@@ -179,30 +186,32 @@
         nextBtn.onclick     = () => proc_step_single();
         allFuncsBtn.onclick = () => proc_func_all();
 
+        function send_req(actid, args = {})
+        {
+            const pid = proc.pid == null ? null : parseInt(proc.pid);
+            actid = parseInt(actid);
+            if((actid == actions.PROC_START_DBG || pid) && isConnected)
+            {
+                const req = JSON.stringify({
+                    "actid": actid,
+                    "args" : {"pid": pid, ...args}
+                });
+                ws.send(req);
+                return;
+            }
+            console.log("pid not set or WS not connected");
+        }
+
         function proc_start_dbg(event = null)
         {
             if(!event)
             {
-                const path = procpathIpt.value;
-                if(path && isConnected)
-                {
-                    const command = JSON.stringify({
-                        "actid": actions.PROC_START_DBG,
-                        "args": {
-                            "path": "demo" 
-                        }
-                    })
-                    // console.log("sending args: ", command);
-                    ws.send(command);
-                }else{
-                    // console.log('pid not provided');
-                }
+                send_req(actions.PROC_START_DBG, {"path": "demo"});
                 return;
             }
             if('resp' in event && 'pid' in event['resp'])
             {
                 proc.pid = event['resp']['pid'];
-                // console.log("pid set: ", proc);
             }
         }
 
@@ -216,23 +225,9 @@
         {
             if(!event)
             {
-                const pid = proc.pid;
-                if(pid && isConnected)
-                {
-                    const command = JSON.stringify({
-                        "actid": actions.PROC_STEP_SINGLE,
-                        "args": {
-                            "pid":  parseInt(pid) 
-                        }
-                    })
-                    // console.log("sending args: ", command);
-                    ws.send(command);
-                }else{
-                    console.log('pid not provided');
-                }
+                send_req(actions.PROC_STEP_SINGLE);
                 return;
             }  
-            console.log('proc_step_single');
             if('resp' in event && 'regs' in event['resp'])
             {
                 console.log('handling new regs');
@@ -245,20 +240,7 @@
         {
             if(!event)
             {
-                const pid = proc.pid;
-                if(pid && isConnected)
-                {
-                    const command = JSON.stringify({
-                        "actid": actions.PROC_REGS_READ,
-                        "args": {
-                            "pid":  parseInt(pid) 
-                        }
-                    })
-                    console.log("sending args: ", command);
-                    ws.send(command);
-                }else{
-                    console.log('pid not provided');
-                }
+                send_req(actions.PROC_REGS_READ);
                 return;
             }
             if('resp' in event && 'regs' in event['resp'])
@@ -292,12 +274,24 @@
             return hexArray;
         }
 
+        function vals_in_range(start, end)
+        {
+            if(start > end)  return [];
+            if(start == end) return [start];
+            let vals = [];
+            for (let i = start; i <= end; i++) {
+                vals.push(i);
+            }
+            return vals;
+        }
+
         function mem_row_keys(total, col_max = 16)
         {
             console.log(`total: ${total}, col_max: ${col_max}`);
             if(col_max > total) return [{
                 col_start: 0,
-                col_end: total
+                col_end: total,
+                keys: vals_in_range(0, total),
             }]
             let keys = [];
             const rows_max = Math.ceil(total / col_max);
@@ -306,7 +300,8 @@
             {
                 keys.push({
                     col_start: start_index,
-                    col_end: end_index
+                    col_end: end_index,
+                    keys: vals_in_range(start_index, end_index),
                 });
                 start_index = end_index + 1;
                 end_index = start_index + col_max;
@@ -318,20 +313,7 @@
         {
             if(!event)
             {
-                const pid = proc.pid;
-                if(pid && isConnected)
-                {
-                    const command = JSON.stringify({
-                        "actid": actions.PROC_MEM_READ,
-                        "args": {
-                            "pid":  parseInt(pid) 
-                        }
-                    })
-                    console.log("sending args: ", command);
-                    ws.send(command);
-                }else{
-                    console.log('pid not provided');
-                }
+                send_req(actions.PROC_MEM_READ)
                 return;
             }
             if('resp' in event && 'mem' in event['resp'])
@@ -358,20 +340,7 @@
         {
             if(!event)
             {
-                const pid = proc.pid;
-                if(pid && isConnected)
-                {
-                    const command = JSON.stringify({
-                        "actid": actions.PROC_FUNC_ALL,
-                        "args": {
-                            "pid":  parseInt(pid) 
-                        }
-                    })
-                    console.log("sending args: ", command);
-                    ws.send(command);
-                }else{
-                    console.log('pid not provided');
-                }
+                send_req(actions.PROC_FUNC_ALL);
                 return;
             }
             if('resp' in event && 'funcs' in event['resp'])
@@ -390,22 +359,6 @@
         }
 
         
-        function sendMessage() {
-            if (ws.readyState === WebSocket.OPEN) {
-                console.log(svrMsgInput.value);
-                const message = {
-                    "actid": 0,
-                    "args": {
-                        "pid": 0
-                    }
-                }
-                if(message){
-                    ws.send(JSON.stringify(message));
-                }else{
-                    ws.send("Default test message");
-                }
-            }
-        }
     </script>
 </body>
 </html>
