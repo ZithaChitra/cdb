@@ -21,6 +21,7 @@ struct user_regs_struct *_trace_proc_get_regs(pid_t pid);
 
 unsigned long long _trace_find_exec_addr(pid_t pid);
 struct iovec *_trace_proc_mem_read(pid_t pid, unsigned long long addr, size_t len);
-
+int _trace_proc_mem_write(pid_t pid, void *remote_addr, void *local_addr, size_t len);
+int _trace_proc_break(pid_t pid, void *addr);
 
 #endif

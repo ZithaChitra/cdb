@@ -12,7 +12,7 @@
 #include "trace.h"
 #include "resolve.h"
 
-// action handler
+// action handler def
 #define ACT_HANDLR_START(handler_name)\
     int handler_name(CDB *cdb, JSON *args, char **resp_str) \
     {   \
@@ -128,24 +128,7 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
     return 0;
 }
 
-int proc_end_dbg(CDB *cdb, JSON *args, char **resp_str)
-{
-
-    if(cdb == NULL)
-    {
-        printf("cdb not provided. could not attach\n");
-        return -1;
-    }
-
-    JSON *pid = json_get_value(args, "pid");
-    if (pid == NULL)
-    {
-        printf("process id not provided. could not attach\n");
-        return -1;
-    }
-
-
-    int proc_exists = cdb_has_proc(cdb, pid->valueint);
+ACT_HANDLR_START(proc_end_dbg)
     if(proc_exists == 1)
     {
         printf("process already attached\n");
@@ -153,10 +136,8 @@ int proc_end_dbg(CDB *cdb, JSON *args, char **resp_str)
         if(cdb_remove_proc(cdb, pid->valueint, -1) == -1) return -1;
         return -1;
     }
-
-    printf("process not found on cdb\n");
-    return -1;
-}
+    // TODO
+ACT_HANDLR_END
 
 ACT_HANDLR_START(proc_regs_read)
     if(!proc_exists) return -1;
@@ -233,6 +214,7 @@ ACT_HANDLR_START(proc_mem_read)
     long read_size = 96;
     unsigned long mem_buffer[5024];
     unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
+    printf("(read mem) exec address- %llu\n", exec_addr);
     struct iovec *local_v;
     local_v = _trace_proc_mem_read(pid->valueint, exec_addr, read_size);
     char mem_encoded[read_size * 4 / 3 + 4];
@@ -249,11 +231,25 @@ ACT_HANDLR_START(proc_mem_read)
     cJSON_AddNumberToObject(resp_, "len", read_size);
 ACT_HANDLR_END
 
-int proc_mem_write(CDB *cdb, JSON *args, char **resp_str)
-{
-    if (cdb  == NULL || args  == NULL) return -1;
-    return 0;
-}
+
+ACT_HANDLR_START(proc_mem_write)
+    printf("-------------------------------\n");
+    printf("generic: proc_mem_write\n");
+    if(!proc_exists) goto failure;
+    unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
+    printf("(write mem) exec address- %llu\n", exec_addr);
+    unsigned char trap = 0xCC;
+    int res = _trace_proc_mem_write(pid->valueint, (void *)exec_addr, &trap, sizeof(trap));
+    if(res < 0)
+    {
+        int err_code = -res;
+        printf("could not write to proc memory: %s\n", strerror(err_code));
+        goto failure;
+    } 
+    printf("wrote to proc memory\n");
+    json_delete(resp);
+    return proc_mem_read(cdb, args, resp_str);
+ACT_HANDLR_END
 
 int proc_step_single(CDB *cdb, JSON *args, char **resp_str)
 {
@@ -264,55 +260,29 @@ int proc_step_single(CDB *cdb, JSON *args, char **resp_str)
     return proc_regs_read(cdb, args, resp_str);
 }
 
-int proc_func_all(CDB *cdb, JSON *args, char **resp_str)
-{
+ACT_HANDLR_START(proc_func_all)
     printf("-------------------------------\n");
     printf("generic: action handler: proc_func_all\n");
-    if (cdb  == NULL || args  == NULL) return -1;
-    JSON *pid = json_get_value(args, "pid");
-    if (pid == NULL)
-    {
-        printf("process id not provided. no regs\n");
-        return -1;
-    }
-    int proc_exists = cdb_has_proc(cdb, pid->valueint);
-    if(!proc_exists) return -1;
+    if(!proc_exists) goto failure;
     PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
     if(proc == NULL)  
     {
         printf("process object not found\n");
-        return -1;
+        goto failure;
     }
     
     FUNC_INFO *funcs = NULL;
     int funcs_total;
     func_find_all(proc->dw_dbg, &funcs, &funcs_total);
     printf("total functions: %d\n", funcs_total);
-    if(funcs == NULL) return -1;
+    if(funcs == NULL) goto failure;
 
-    JSON *resp = json_init("empty", NULL);
-    if(resp == NULL) 
-    {
-        free(funcs);
-        printf("(resp) could not allocate memory for response\n");
-        return -1;
-    }
-
-    JSON *resp_ = json_init("empty", NULL);
-    if(resp_ == NULL) 
-    {
-        free(funcs);
-        json_delete(resp);
-        printf("(resp_) could not allocate memory for response\n");
-        return -1;
-    }
     JSON *funcs_json = json_init("empty", NULL);
     if(funcs_json == NULL)
     {
         printf("(funcs) could not allocate memory for response\n");
         free(funcs);
-        json_delete(resp);
-        return 1;
+        goto failure;
     }
     for (size_t i = 0; i < funcs_total; i++)
     {
@@ -328,22 +298,24 @@ int proc_func_all(CDB *cdb, JSON *args, char **resp_str)
             cJSON_AddItemToObject(funcs_json, func_info->func_name, func);
         }
     }
-
-    JSON *action = json_get_value(args, "actid");
-    cJSON_AddNumberToObject(resp, "actid", action->valueint);
-
     cJSON_AddItemToObject(resp_, "funcs", funcs_json);
-cJSON_AddItemToObject(resp, "resp", resp_);
-
-*resp_str = cJSON_PrintUnformatted(resp);
-    json_delete(resp);
-    return 0;
-}
+ACT_HANDLR_END
 
 int proc_func_single(CDB *cdb, JSON *args, char **resp_str)
 {
     return 0;
 }
+
+ACT_HANDLR_START(proc_break)
+    if(!proc_exists) goto failure;
+    unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
+    if(_trace_proc_break(pid->valueint, (void*)exec_addr) == -1)
+    {
+        goto failure;
+    }
+    json_delete(resp);
+    return proc_mem_read(cdb, args, resp_str);
+ACT_HANDLR_END
 
 int no_action()
 {

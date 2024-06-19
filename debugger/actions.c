@@ -11,5 +11,6 @@ HANDLER_CDB action_handlers[] = {
     (HANDLER_CDB)proc_step_single,
     (HANDLER_CDB)proc_func_all,
     (HANDLER_CDB)proc_func_single,
+    (HANDLER_CDB)proc_break,
     (HANDLER_CDB)no_action,
 };

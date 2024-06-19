@@ -36,8 +36,14 @@
                 <button id="allFuncsBtn" type="button" class="w-full mb-1  bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     All Funcs
                 </button>
-                <button id="readMemBtn"  type="button" class="w-full bg-blue-500 p-1 rounded text-white flex items-center">
+                <button id="readMemBtn"  type="button" class="w-full mb-1 bg-blue-500 p-1 rounded text-white flex items-center">
                     Read Mem
+                </button>
+                <button id="writeMemBtn"  disabled type="button" class="w-full mb-1 bg-blue-500 p-1 rounded text-white flex items-center">
+                    Write Mem
+                </button>
+                <button id="breakBtn" type="button" class="w-full mb-1 bg-blue-500 p-1 rounded text-white flex items-center">
+                    Set BreakPoint
                 </button>
             </div>
             <div >
@@ -85,13 +91,13 @@
                         <div class="grid grid-cols-6">
                             <p class="col-span-2" x-text="func.func_name"></p>
                             <p class="col-span-4 border" x-text="func.low_pc"></p>
+                            <button @click="">break</button>
                         </div>
                     </template>
                 </div>
             </div>
         </div>
     </div>
-
 
     <script>
         const svrMsgInput   = document.getElementById('svrMsgInput');
@@ -100,21 +106,24 @@
         const procpathIpt   = document.getElementById('procpath');
         const getRegsBtn    = document.getElementById('getRegsBtn');
         const readMemBtn    = document.getElementById('readMemBtn');
+        const writeMemBtn   = document.getElementById('writeMemBtn');
         const startDbgBtn   = document.getElementById('startDbgBtn');
         const nextBtn       = document.getElementById('nextBtn');
         const allFuncsBtn   = document.getElementById('allFuncsBtn');
+        const breakBtn      = document.getElementById('breakBtn');
 
         const actions = {
-            PROC_START_DBG          : 0,             // - 0
-            PROC_END_DBG            : 1,             // - 1
-            PROC_REGS_READ          : 2,             // - 2
-            PROC_REGS_WRITE         : 3,             // - 3
-            PROC_MEM_READ           : 4,             // - 4
-            PROC_MEM_WRITE          : 5,             // - 5
-            PROC_STEP_SINGLE        : 6,             // - 6
-            PROC_FUNC_ALL           : 7,             // - 7
-            PROC_FUNC_SINGLE        : 8,             // - 8
-            UNKNOWN_ACTION          : 9,             // - 9
+            PROC_START_DBG          : 0,                // - 0
+            PROC_END_DBG            : 1,                // - 1
+            PROC_REGS_READ          : 2,                // - 2
+            PROC_REGS_WRITE         : 3,                // - 3
+            PROC_MEM_READ           : 4,                // - 4
+            PROC_MEM_WRITE          : 5,                // - 5
+            PROC_STEP_SINGLE        : 6,                // - 6
+            PROC_FUNC_ALL           : 7,                // - 7
+            PROC_FUNC_SINGLE        : 8,                // - 8
+            PROC_BREAK              : 9,                // - 9             
+            UNKNOWN_ACTION          : 10,               // - 10
         }
         const msg_handlers = [
             proc_start_dbg,
@@ -125,12 +134,12 @@
             proc_mem_write,
             proc_step_single,
             proc_func_all,
-            proc_func_single
+            proc_func_single,
+            proc_break,
         ];
 
         let isConnected     = false;
         let proc = {};
-
 
         document.addEventListener('alpine:init', () => {
             console.log('alpine initiatedc');
@@ -180,11 +189,14 @@
             isConnected = false;
         };
 
+        console.log(writeMemBtn);
         getRegsBtn.onclick  = () => proc_regs_read();
         readMemBtn.onclick  = () => proc_mem_read();
+        writeMemBtn.onclick = () => proc_mem_write();
         startDbgBtn.onclick = () => proc_start_dbg();
         nextBtn.onclick     = () => proc_step_single();
         allFuncsBtn.onclick = () => proc_func_all();
+        breakBtn.onclick    = () => proc_break();
 
         function send_req(actid, args = {})
         {
@@ -330,8 +342,27 @@
             }
         }
 
-        function proc_mem_write()
+
+        function proc_mem_write(event = null)
         {
+            console.log("calling func: proc_mem_write");
+            if(!event)
+            {
+                send_req(actions.PROC_MEM_WRITE)
+                return;
+            }
+            if('resp' in event && 'mem' in event['resp'])
+            {
+                const mem = event['resp']['mem'];
+                const len = event['resp']['len'];
+                const bytes_arr   = base64ToUint8Array(mem);
+                const keys        = mem_row_keys(len)
+                proc.mem.buffer   = bytes_arr;
+                proc.mem.col_keys = keys;
+                console.log("mem[]: ", mem);
+                console.log("bytes[]: ", bytes_arr);
+                console.log("keys[]: ", keys);
+            }
 
         }
 
@@ -358,6 +389,32 @@
 
         }
 
+        function btn_insert_break()
+        {
+            console.log("call proc_break");  
+        }
+
+        function proc_break(event = null)
+        {
+            console.log("calling func: proc_break");
+            if(!event)
+            {
+                send_req(actions.PROC_BREAK)
+                return;
+            }
+            if('resp' in event && 'mem' in event['resp'])
+            {
+                const mem = event['resp']['mem'];
+                const len = event['resp']['len'];
+                const bytes_arr   = base64ToUint8Array(mem);
+                const keys        = mem_row_keys(len)
+                proc.mem.buffer   = bytes_arr;
+                proc.mem.col_keys = keys;
+                console.log("mem[]: ", mem);
+                console.log("bytes[]: ", bytes_arr);
+                console.log("keys[]: ", keys);
+            }
+        }
         
     </script>
 </body>

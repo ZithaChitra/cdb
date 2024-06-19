@@ -217,3 +217,59 @@ struct iovec *_trace_proc_mem_read(pid_t pid, unsigned long long addr, size_t le
     return NULL;
 }
 
+
+int _trace_proc_mem_write(pid_t pid, void *remote_addr, void *local_addr, size_t len)
+{
+    // errno = 0;
+    // struct iovec local_iovec = {
+    //     .iov_base   = local_addr,
+    //     .iov_len    = len
+    // };
+    // struct iovec remote_iovec = {
+    //     .iov_base   = remote_addr,
+    //     .iov_len    = len
+    // };
+
+    // size_t b_written = process_vm_writev(pid, &local_iovec, 1, &remote_iovec, 1, 0);
+    // if(b_written == -1) return -errno;
+    // return (int)b_written;
+    long og_code = ptrace(PTRACE_PEEKTEXT, pid, remote_addr, NULL);
+    if(og_code == -1) return -1;
+    long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
+    return ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
+}
+
+
+
+int _trace_proc_break(pid_t pid, void *addr)
+{
+    if(pid && addr)
+    {
+        long og_code = ptrace(PTRACE_PEEKTEXT, pid, addr, NULL);
+        if(og_code == -1) return -1;
+        long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
+        return ptrace(PTRACE_POKETEXT, pid, addr, md_code);
+    }
+    return -1;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
