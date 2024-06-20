@@ -271,9 +271,9 @@ ACT_HANDLR_START(proc_func_all)
         goto failure;
     }
     
-    FUNC_INFO *funcs = NULL;
     int funcs_total;
-    func_find_all(proc->dw_dbg, &funcs, &funcs_total);
+    FUNC_INFO **funcs = func_find_all(proc->dw_dbg, &funcs_total);
+    
     printf("total functions: %d\n", funcs_total);
     if(funcs == NULL) goto failure;
 
@@ -286,7 +286,8 @@ ACT_HANDLR_START(proc_func_all)
     }
     for (size_t i = 0; i < funcs_total; i++)
     {
-        FUNC_INFO *func_info = (funcs + i);
+        FUNC_INFO *func_info = *(funcs + i);
+        if(func_info == NULL) continue;
         func_info_print(func_info);
         JSON *func = json_init("empty", NULL);
         if(func)

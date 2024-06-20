@@ -78,7 +78,7 @@
                         x-for="(reg, key) in $store.proc.regs">
                         <div class="grid grid-cols-6">
                             <p class="col-span-2" x-text="key"></p>
-                            <p class="col-span-4 border" x-text="reg"></p>
+                            <p class="col-span-4 border" @click="btn_insert_break(key)" x-text="reg"></p>
                         </div>
                 </template>
                 </div>
@@ -90,8 +90,8 @@
                         x-for="(func, key) in $store.proc.funcs">
                         <div class="grid grid-cols-6">
                             <p class="col-span-2" x-text="func.func_name"></p>
-                            <p class="col-span-4 border" x-text="func.low_pc"></p>
-                            <button @click="">break</button>
+                            <p class="col-span-2 border" x-text="func.low_pc"></p>
+                            <button class="col-span-2" @click="btn_insert_break(func.low_pc)">break</button>
                         </div>
                     </template>
                 </div>
@@ -389,9 +389,9 @@
 
         }
 
-        function btn_insert_break()
+        function btn_insert_break(addr = null)
         {
-            console.log("call proc_break");  
+            console.log(`call proc_break@ ${addr}`);  
         }
 
         function proc_break(event = null)

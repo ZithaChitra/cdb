@@ -46,7 +46,7 @@ int func_info_read_from_die(Dwarf_Debug dbg, Dwarf_Die die,
             return -1;
         }
 
-        // if(dwarf_srclines(die, &linebuf, 
+// if(dwarf_srclines(die, &linebuf, 
         //     &(*func_info)->linecount, &err) != DW_DLV_OK)
         // {
         //     printf("errno: %lld\n", dwarf_errno(err));
@@ -70,7 +70,7 @@ int func_info_read_from_die(Dwarf_Debug dbg, Dwarf_Die die,
     return -1;
 }
 
-int func_find_all(Dwarf_Debug dbg, FUNC_INFO **all_funcs, int *total)
+FUNC_INFO **func_find_all(Dwarf_Debug dbg, int *total)
 {
     Dwarf_Error err;
     Dwarf_Die no_die = 0, cu_die, child_die;
@@ -80,8 +80,8 @@ int func_find_all(Dwarf_Debug dbg, FUNC_INFO **all_funcs, int *total)
 
     // lets assume a max of 10 funcs for now
     int max_funcs = 10;
-    *all_funcs = (FUNC_INFO **)malloc(sizeof(FUNC_INFO *) * max_funcs);
-    if(*all_funcs == NULL) return -1;
+    FUNC_INFO **all_funcs = (FUNC_INFO **)malloc(sizeof(FUNC_INFO *) * max_funcs);
+    if(all_funcs == NULL) return NULL;
     
 
     while(dwarf_next_cu_header(dbg, &curr_header_len, &version_stamp,
@@ -99,13 +99,13 @@ int func_find_all(Dwarf_Debug dbg, FUNC_INFO **all_funcs, int *total)
                 if(func_info_read_from_die(dbg, child_die, &func_info) == -1) continue;
                 if(func_info == NULL || func_info->low_pc == 0) continue;
                 if(curs >= max_funcs) break;
-                (*all_funcs)[curs] = *func_info;
+                all_funcs[curs] = func_info;
                 curs++;
             }while(dwarf_siblingof(dbg, child_die, &child_die, &err) == DW_DLV_OK);
         }
         dwarf_dealloc(dbg, cu_die, DW_DLA_DIE);
     }
     *total = curs;
-    return 0;
+    return all_funcs;
 }
 
