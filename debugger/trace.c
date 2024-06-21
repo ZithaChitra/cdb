@@ -150,12 +150,12 @@ struct user_regs_struct *_trace_proc_get_regs(pid_t pid)
     return regs;
 }
 
-unsigned long long _trace_find_exec_addr(pid_t pid)
+void *_trace_find_exec_addr(pid_t pid)
 {
     if(!pid)
     {
         perror("executableAddr: pid not privided");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     FILE *f;
@@ -170,7 +170,7 @@ unsigned long long _trace_find_exec_addr(pid_t pid)
     if((f = fopen(fileName, "r")) == NULL)
     {
         perror("executableAddr: could not open proc 'map' file");
-        exit(1);
+        return NULL;
     }
 
     while(fgets(line, sizeof(line), f) != NULL)
@@ -182,12 +182,12 @@ unsigned long long _trace_find_exec_addr(pid_t pid)
         }
     } 
     fclose(f);
-    return address;
+    return (void *)address;
 }
 
-struct iovec *_trace_proc_mem_read(pid_t pid, unsigned long long addr, size_t len)
+struct iovec *_trace_proc_mem_read(pid_t pid, void *remote_addr, size_t len)
 {
-    if(pid && addr && len) 
+    if(pid && remote_addr && len) 
     {
         char *local_buff = (char *)malloc(len);
         if(local_buff == NULL) return NULL;
@@ -201,7 +201,7 @@ struct iovec *_trace_proc_mem_read(pid_t pid, unsigned long long addr, size_t le
         local_v->iov_len = len;
 
         struct iovec remote_v = {
-            .iov_base = (void *)addr,
+            .iov_base = remote_addr,
             .iov_len  = len
         };
         ssize_t nread = process_vm_readv(pid, local_v, 1, &remote_v, 1, 0);
@@ -241,14 +241,14 @@ int _trace_proc_mem_write(pid_t pid, void *remote_addr, void *local_addr, size_t
 
 
 
-int _trace_proc_break(pid_t pid, void *addr)
+int _trace_proc_break(pid_t pid, void *remote_addr)
 {
-    if(pid && addr)
+    if(pid && remote_addr)
     {
-        long og_code = ptrace(PTRACE_PEEKTEXT, pid, addr, NULL);
+        long og_code = ptrace(PTRACE_PEEKTEXT, pid, remote_addr, NULL);
         if(og_code == -1) return -1;
         long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
-        return ptrace(PTRACE_POKETEXT, pid, addr, md_code);
+        return ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
     }
     return -1;
 }

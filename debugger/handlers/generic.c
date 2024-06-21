@@ -210,14 +210,20 @@ void base64_encode_(const unsigned char *input, int length, char *output) {
 
 ACT_HANDLR_START(proc_mem_read)
     printf("generic: (updated) proc_mem_read\n");
-    if(!proc_exists) return -1;
+    if(!proc_exists)
+    {
+        json_delete(resp);
+        return -1;
+    };
     long read_size = 96;
     unsigned long mem_buffer[5024];
-    unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
-    printf("(read mem) exec address- %llu\n", exec_addr);
-    struct iovec *local_v;
-    local_v = _trace_proc_mem_read(pid->valueint, exec_addr, read_size);
     char mem_encoded[read_size * 4 / 3 + 4];
+
+    PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
+    if(proc == NULL) goto failure;
+
+    struct iovec *local_v;
+    local_v = _trace_proc_mem_read(pid->valueint, proc->exec_addr, read_size);
     if(local_v == NULL)
     {
         goto failure;
@@ -309,8 +315,10 @@ int proc_func_single(CDB *cdb, JSON *args, char **resp_str)
 
 ACT_HANDLR_START(proc_break)
     if(!proc_exists) goto failure;
-    unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
-    if(_trace_proc_break(pid->valueint, (void*)exec_addr) == -1)
+    PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
+    if(proc == NULL) goto failure;
+    
+    if(_trace_proc_break(pid->valueint, proc->exec_addr) == -1)
     {
         goto failure;
     }

@@ -13,6 +13,7 @@ typedef struct process
 {
     pid_t pid;
     FILE *src;
+    void *exec_addr; // text addr
     Dwarf_Debug dw_dbg;
 } PROCESS;
 

@@ -15,9 +15,10 @@ PROCESS *proc_init(pid_t pid)
 {
     PROCESS *proc = (PROCESS *)malloc(sizeof(PROCESS));
     if(proc == NULL) return NULL;
-    proc->pid    = pid;
-    proc->src    = NULL;
-    proc->dw_dbg = 0;
+    proc->pid       = pid;
+    proc->src       = NULL;
+    proc->exec_addr = _trace_find_exec_addr(pid);
+    proc->dw_dbg    = 0;
     return proc;
 }
 
