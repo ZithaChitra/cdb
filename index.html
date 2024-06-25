@@ -3,14 +3,32 @@
 <head>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
+    <style>
+        #mem-view {
+                    font-family: monospace;
+                    white-space: pre;
+                    max-height: 80vh;
+                    overflow: scroll;
+                }
+    </style>
     <title> CDB GUI</title>
 </head>
 <body class="bg-gray-900 text-white">
-    <h1 class="text-center py-1  mb-2 text-lg font-bold border-b">
-      Chitra's Debugger
-      </h1>
-    <div class="grid grid-cols-12 gap-2 px-4">
-        <div class="mb-5 col-span-3">
+    <div class="flex justify-between px-4 border-b mb-2 max-w-screen-xlg mx-auto">
+        <div class="flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" id="connIcon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="red" class="size-6 block">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+              </svg>
+        </div>
+
+        <h1 class="text-center py-1 text-lg font-bold ">
+        Chitra's Debugger
+        </h1>
+        <div></div>
+    </div>
+    <div class="grid grid-cols-12 gap-2 px-4  max-w-screen-xlg mx-auto" >
+        <div class="mb-5 col-span-2">
             <div>
                 <div>
                     <label for=""> proc path</label>
@@ -52,22 +70,10 @@
                     placeholder=" server response"></textarea>
             </div>
         </div>
-        <div class="col-span-6">
+        <div class="col-span-7">
             <div class="border rounded p-1">
                 <h3 class="mb-2">Memory</h3>
-                <div x-data>
-                    <template
-                        x-for="(row, key) in $store.proc.mem.col_keys">
-                        <div class="">
-                            <div class="flex justify-between">
-                                <template 
-                                    x-for="col in row.keys">
-                                    <p x-text="$store.proc.mem.buffer[col]" class="col-span-1"></p>
-                                </template>
-                            </div>
-                        </div>
-                    </template>
-                </div>
+                <div id="mem-view"></div>
             </div>
         </div>
         <div class="col-span-3">
@@ -88,9 +94,10 @@
                 <div x-data>
                     <template
                         x-for="(func, key) in $store.proc.funcs">
-                        <div class="grid grid-cols-6">
+                        <div class="grid grid-cols-8">
                             <p class="col-span-2" x-text="func.func_name"></p>
                             <p class="col-span-2 border" x-text="func.low_pc"></p>
+                            <button class="col-span-2" @click="btn_func_mem_read(func.low_pc)">focus</button>
                             <button class="col-span-2" @click="btn_insert_break(func.low_pc)">break</button>
                         </div>
                     </template>
@@ -111,6 +118,7 @@
         const nextBtn       = document.getElementById('nextBtn');
         const allFuncsBtn   = document.getElementById('allFuncsBtn');
         const breakBtn      = document.getElementById('breakBtn');
+        const connIcon      = document.getElementById('connIcon');
 
         const actions = {
             PROC_START_DBG          : 0,                // - 0
@@ -166,6 +174,7 @@
         ws.onopen = function() {
             console.log("Connection opened");
             isConnected = true;
+            connIcon.setAttribute('stroke', 'green')
         };
         ws.onmessage = function(event) {
             svrMsgResp.innerText = event.data
@@ -187,6 +196,7 @@
         ws.onclose = function() {
             console.log("Connection closed");
             isConnected = false;
+            connIcon.setAttribute('stroke', 'red')
         };
 
         console.log(writeMemBtn);
@@ -197,6 +207,42 @@
         nextBtn.onclick     = () => proc_step_single();
         allFuncsBtn.onclick = () => proc_func_all();
         breakBtn.onclick    = () => proc_break();
+
+
+        function display_mem(data) {
+            const hexView = document.getElementById('mem-view');
+            hexView.textContent = arrayBufferToHex(data);
+        }
+
+        function arrayBufferToHex(byteArray) {
+            let hexString       = '';
+            const bytesPerLine  = 16;
+
+            for (let offset = 0; offset < byteArray.length; offset += bytesPerLine) {
+                hexString += offset.toString(16).padStart(8, '0') + '\t';
+
+                for (let i = 0; i < bytesPerLine; i++) {
+                    if (offset + i < byteArray.length) {
+                        hexString += byteArray[offset + i].toString(16).padStart(2, '0') + ' ';
+                    } else {
+                        hexString += '   ';
+                    }
+                }
+                hexString += '\t';
+
+                for (let i = 0; i < bytesPerLine; i++) {
+                    if (offset + i < byteArray.length) {
+                        const charCode = byteArray[offset + i];
+                        hexString += (charCode >= 32 && charCode <= 126) ? String.fromCharCode(charCode) : '.';
+                    } else {
+                        hexString += ' ';
+                    }
+                }
+                hexString += '\n';
+            }
+
+            return hexString;
+        }
 
         function send_req(actid, args = {})
         {
@@ -268,22 +314,14 @@
 
         }
 
-        function base64ToUint8Array(base64) 
-        {
+        function base64ToUint8Array(base64) {
             const binaryString = atob(base64);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
-            // return bytes;
-            const hexArray = [];
-            for (const byte of bytes) {
-                const hex = byte.toString(16).padStart(2, '0');
-                hexArray.push(hex);
-            }
-
-            return hexArray;
+            return bytes;
         }
 
         function vals_in_range(start, end)
@@ -321,27 +359,36 @@
             return keys;
         }
 
-        function proc_mem_read(event = null)
+        function proc_mem_read(event = null, address = null)
         {
             if(!event)
             {
-                send_req(actions.PROC_MEM_READ)
+                const args = address == null ? {} : {"read_address": address};
+                send_req(actions.PROC_MEM_READ, args)
                 return;
             }
             if('resp' in event && 'mem' in event['resp'])
             {
-                const mem = event['resp']['mem'];
+                const encodedMem = event['resp']['mem'];
                 const len = event['resp']['len'];
-                const bytes_arr   = base64ToUint8Array(mem);
-                const keys        = mem_row_keys(len)
-                proc.mem.buffer   = bytes_arr;
-                proc.mem.col_keys = keys;
-                console.log("mem[]: ", mem);
-                console.log("bytes[]: ", bytes_arr);
-                console.log("keys[]: ", keys);
+                // const bytes_arr   = base64ToUint8Array(mem);
+                // const keys        = mem_row_keys(len)
+                // proc.mem.buffer   = bytes_arr;
+                // proc.mem.col_keys = keys;
+                const mem = base64ToUint8Array(encodedMem)
+                console.log("mem", mem)
+                const decompressedData = pako.inflate(mem);
+                console.log('decomp', decompressedData);
+                display_mem(decompressedData)
             }
         }
 
+        // const encodedMem = "eJztl99LU2EYx8/Z2py/thWapqJDNLLENsyLrKGQJ966imhQkKGxSUT+YG4oRSCsgsOSpLrwpj8gCPLSm2C62PJOb8LuViQcwWppgZXt7XnPeY5tYnd1ETwfePd9n5/v87Jz82646r+z2JqDxW1vjkoSu5uIWPgii710JCUB73gI7nXe/AjE1SBtQP41EVhffcs5n9JtWbeXTBuyn+jZPZKEdu8OO5Bv+z6cUZeuMPUdi73Pnrug+BK+BTbp/ymOr2yHzC8Dba6GO/o84L8k5py0nRdyfDNSCaPvx9GLecbVMCHykqiQ36LndzQKackxNcvmPnaxuU0rk1NsKRepgAYrbUYDB88M6HOZ9WK+Cb8IS9EjARbzz4stU1ciZSzuT4GhFcO9tSD8pGwvwJZ7obagfnUMgmITgDqm3taYGs2klS2b6BRXNHUefjOu54txZUteVJUtUDbdm9wuia154cIBpzg4rT3Ncc7SyrJVlKeVjNEmkIEmy0x9LVIewIFMVTSoatWrlKw4CHQTMmGBraYgWmX0nBWjan3QWN8tJPW59e9i+0sgCIIgCIIgCIIg/mdkySIFQ4PDntFIfzgSCkrR0VB4qH8wtL3p9DSPtnqGooNXQ2HY3wiW6HW11hMnQe2wtE+cj4BWZzmfBj0EOgPKQC+C+j5z/go0CKrhuRXm+TfPS/K4W64tK3JMyYa/DnseFAk9RW4hTbCOwRoBv1c4nO7TzuqzrtIxx4TUVdN5uL2p0ex7GdY45Lnz7in8Eaz35PnFWfdh9cOs7cKhON33LKfK7ddhIIw/E7UQv5Uft4SNBIIgCIIgCIIgiH9E315DPagy+ttQy8xEfPyUo1m9z9ADaM/4Da1F23zK1KDOYrxuR/xrjg/r9VbDtqF/eo+hdrSXMV6C9mPUUnMe1EqpEKs5X5ehFrS9qOa7sQi1yozbC/0jtsK5E6jFO86vlwrzfnDjfjK6cmh3Yz/+O66TRbsV49/QNu/xt0n4d/d78f/udu8e/xP0/qf3P0EQBCFJvwAGI5AA"
+        // const mem = base64ToUint8Array(encodedMem)
+        // console.log("mem", mem)
+        // const decompressedData = pako.inflate(mem);
+        // console.log('decomp', decompressedData);
+        // display_mem(decompressedData)
 
         function proc_mem_write(event = null)
         {
@@ -363,7 +410,6 @@
                 console.log("bytes[]: ", bytes_arr);
                 console.log("keys[]: ", keys);
             }
-
         }
 
 
@@ -384,22 +430,37 @@
                 console.log("invalid args");
             }
         }
+
         function proc_func_single()
         {
 
         }
 
-        function btn_insert_break(addr = null)
+        function btn_insert_break(addr)
         {
-            console.log(`call proc_break@ ${addr}`);  
+            console.log(`call proc_break@${addr}: type: ${typeof addr}`);  
+            proc_break(null, addr);
         }
 
-        function proc_break(event = null)
+
+        function btn_func_mem_read(addr)
+        {
+            console.log(`call proc_mem_read@${addr}: type: ${typeof addr}`);  
+            proc_mem_read(null, addr)
+        }
+
+        function proc_break(event = null, addr = null)
         {
             console.log("calling func: proc_break");
             if(!event)
             {
-                send_req(actions.PROC_BREAK)
+                if(!addr)
+                {
+                    console.log("break address not provided");
+                    return;
+                }
+
+                send_req(actions.PROC_BREAK, {"break_address": addr})
                 return;
             }
             if('resp' in event && 'mem' in event['resp'])
@@ -415,7 +476,6 @@
                 console.log("keys[]: ", keys);
             }
         }
-        
     </script>
 </body>
 </html>

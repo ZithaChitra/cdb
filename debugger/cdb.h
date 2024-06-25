@@ -6,6 +6,7 @@
 #include <libdwarf/libdwarf.h>
 #include <stdio.h>
 #include "json.h"
+#include "data/hashmap.h"
 
 #define MAX_PROC 1
 
@@ -15,6 +16,7 @@ typedef struct process
     FILE *src;
     void *exec_addr; // text addr
     Dwarf_Debug dw_dbg;
+    HASHMAP *breaks;
 } PROCESS;
 
 typedef struct cdb
@@ -25,6 +27,8 @@ typedef struct cdb
 
 PROCESS *proc_init(pid_t pid);
 void proc_delete(PROCESS *proc);
+int proc_add_break(PROCESS *proc, void **addr);
+int proc_rm_break(PROCESS *proc, char *addr);
 
 CDB *cdb_init();
 int cdb_has_proc(CDB *cdb, pid_t pid);

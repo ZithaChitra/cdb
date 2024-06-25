@@ -3,27 +3,28 @@
 
 #define MAP_LEN 5
 
-typedef struct HASH_NODE HASH_NODE;
+typedef struct HASHNODE HASHNODE;
 typedef struct HASHMAP HASHMAP;
 
-struct HASH_NODE 
+struct HASHNODE 
 {
     char *key;
     void *value;
-    HASH_NODE *next;
+    HASHNODE *next;
 };
 
 struct HASHMAP
 {
     int len;
-    HASH_NODE **table;
+    HASHNODE **table;
 };
 
 HASHMAP* hashmap_init();
-HASH_NODE *hash_node_init();
+HASHNODE *hashnode_init();
 unsigned int hash_gen_key(HASHMAP *map, char *key);
-int hashmap_insert(HASHMAP *map, char* key, void *val);
-int hashmap_delete(HASHMAP *map, char* key);
-HASH_NODE *hashmap_find(HASHMAP *map, char* key);
+int hashmap_insert_node(HASHMAP *map, char* key, void *val);
+int hashmap_rm_node(HASHMAP *map, char* key);
+HASHNODE *hashmap_find_node(HASHMAP *map, char* key);
+int hashnode_del(HASHNODE *node);
 
 #endif

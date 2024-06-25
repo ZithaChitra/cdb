@@ -6,7 +6,7 @@
 #define MAX_IO_ENTITIES 2
 
 #ifndef BUFFER_SIZE
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 15000
 #endif
 
 #ifndef PORT

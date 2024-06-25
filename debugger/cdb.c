@@ -1,12 +1,14 @@
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 
 #include "actions.h"
 #include "trace.h"
 #include "cdb.h"
+#include "data/hashmap.h"
 
 extern HANDLER_CDB action_handlers[];
 extern CDB *cdb_main;
@@ -15,6 +17,12 @@ PROCESS *proc_init(pid_t pid)
 {
     PROCESS *proc = (PROCESS *)malloc(sizeof(PROCESS));
     if(proc == NULL) return NULL;
+    proc->breaks    = hashmap_init();
+    if(proc->breaks == NULL)
+    {
+        free(proc);
+        return NULL;
+    }
     proc->pid       = pid;
     proc->src       = NULL;
     proc->exec_addr = _trace_find_exec_addr(pid);
@@ -36,8 +44,38 @@ void proc_delete(PROCESS *proc)
         }
     }
     if(proc->src) fclose(proc->src);
+    // free breaks hashamp
     free(proc);
 }
+
+int proc_add_break(PROCESS *proc, void **addr)
+{
+    if(proc == NULL || addr == NULL) return -1;
+    char addr_str[100];
+    int addr_len = 100;
+    snprintf(addr_str, addr_len, "%p", *addr);
+    char *key = (char *)malloc((addr_len + 1) * sizeof(char));
+    if(key == NULL) return -1;
+    char *value = (char *)malloc((addr_len + 1) * sizeof(char));
+    if(value == NULL)
+    {
+        free(key);
+        return -1;
+    }
+    strcpy(key, addr_str);
+    strcpy(value, addr_str);
+
+    printf("Address: %p, addr_str: %s, key: %s, value: %s\n", *addr, addr_str, key, value);
+
+    return hashmap_insert_node(proc->breaks, key, (void *)value);
+}
+
+int proc_rm_break(PROCESS *proc, char *addr)
+{
+    if(proc == NULL || addr == NULL) return -1;
+    return hashmap_rm_node(proc->breaks, addr);
+}
+
 
 CDB *cdb_init()
 {

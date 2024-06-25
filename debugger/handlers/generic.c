@@ -6,11 +6,13 @@
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 #include <sys/uio.h>
+#include <zlib.h>
 #include "generic.h"
 #include "cdb.h"
 #include "json.h"
 #include "trace.h"
 #include "resolve.h"
+#include "data/hashmap.h"
 
 // action handler def
 #define ACT_HANDLR_START(handler_name)\
@@ -209,32 +211,55 @@ void base64_encode_(const unsigned char *input, int length, char *output) {
 
 
 ACT_HANDLR_START(proc_mem_read)
-    printf("generic: (updated) proc_mem_read\n");
     if(!proc_exists)
     {
         json_delete(resp);
         return -1;
     };
-    long read_size = 96;
-    unsigned long mem_buffer[5024];
+    long read_size = 10000;
     char mem_encoded[read_size * 4 / 3 + 4];
+
 
     PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
     if(proc == NULL) goto failure;
 
+    JSON *addr = json_get_value(args, "read_address"); 
+    void *read_addr = 0;
+    if(addr == NULL)
+    {
+        read_addr = proc->exec_addr;
+        printf("proc exec: %p\n", proc->exec_addr);
+        printf("proc read_address not set\n");
+    }else{
+        read_addr = (char *)proc->exec_addr + strtoull(addr->valuestring, NULL, 16);
+        printf("proc exec: %p\n", proc->exec_addr);
+        printf("proc read_address: %p\n", read_addr);
+    }
+
     struct iovec *local_v;
-    local_v = _trace_proc_mem_read(pid->valueint, proc->exec_addr, read_size);
+    local_v = _trace_proc_mem_read(pid->valueint, read_addr, read_size);
     if(local_v == NULL)
     {
         goto failure;
     }
 
-    base64_encode_(local_v->iov_base, read_size, mem_encoded);
-    free(local_v->iov_base);
-    free(local_v);
+    size_t compressed_size = compressBound(local_v->iov_len + 1);
+    char *compressed_data = (char *)malloc(compressed_size);
+    int res = compress((Bytef*)compressed_data, &compressed_size, 
+                (Bytef*)local_v->iov_base, local_v->iov_len);
+    if(res != Z_OK)
+    {
+           
+    }   
+
+    base64_encode_(compressed_data, compressed_size, mem_encoded);
 
     cJSON_AddStringToObject(resp_, "mem", mem_encoded);
     cJSON_AddNumberToObject(resp_, "len", read_size);
+
+    free(local_v->iov_base);
+    free(local_v);
+    free(compressed_data);
 ACT_HANDLR_END
 
 
@@ -317,11 +342,33 @@ ACT_HANDLR_START(proc_break)
     if(!proc_exists) goto failure;
     PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
     if(proc == NULL) goto failure;
-    
-    if(_trace_proc_break(pid->valueint, proc->exec_addr) == -1)
+
+    JSON *break_addr = json_get_value(args, "break_address");
+    if(break_addr == NULL) goto failure;
+    void *addr = (char *)proc->exec_addr + strtoull(break_addr->valuestring, NULL, 16);
+    printf("----------------\n");
+    printf("received break address: %p\n", addr);
+    printf("----------------\n");
+    if(_trace_proc_break(pid->valueint, addr) == -1)
     {
         goto failure;
     }
+    int index = proc_add_break(proc, &addr);
+    JSON *json = json_init("empty", NULL);
+    if (json)
+    {
+        char *addr_str = (char *)malloc(100);
+        // free
+        if(addr_str)
+        {
+            snprintf(addr_str, 100, "%p", addr);
+            cJSON_AddStringToObject(json, "read_address", addr_str);
+            cJSON_AddItemToObject(args, "read_address", json);
+
+        }
+    }
+    
+    printf("bp added at index: %d\n", index);
     json_delete(resp);
     return proc_mem_read(cdb, args, resp_str);
 ACT_HANDLR_END

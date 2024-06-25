@@ -15,7 +15,7 @@
 #define MAX_EVENTS 10
 
 #define PORT 8080
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 15000
 
 
 int sys_start() {

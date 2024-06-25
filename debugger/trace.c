@@ -243,12 +243,24 @@ int _trace_proc_mem_write(pid_t pid, void *remote_addr, void *local_addr, size_t
 
 int _trace_proc_break(pid_t pid, void *remote_addr)
 {
+    errno = 0;
     if(pid && remote_addr)
     {
         long og_code = ptrace(PTRACE_PEEKTEXT, pid, remote_addr, NULL);
-        if(og_code == -1) return -1;
+        if(og_code == -1) 
+        {
+            printf("(peek) could not read from address %s\n", strerror(errno));
+            return -1;
+
+        }
         long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
-        return ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
+
+        int res = ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
+        if(res == -1)
+        {
+            printf("(poke) could not read from address %s\n", strerror(errno));
+        }
+        return res;
     }
     return -1;
 }
