@@ -51,6 +51,9 @@
                 <button id="nextBtn" type="button" class="w-full  mb-1 bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     Next i
                 </button>
+                <button id="contBtn" type="button" class="w-full  mb-1 bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
+                    Continue
+                </button>
                 <button id="allFuncsBtn" type="button" class="w-full mb-1  bg-blue-500 p-1 mr-2 rounded text-white flex items-center">
                     All Funcs
                 </button>
@@ -116,6 +119,7 @@
         const writeMemBtn   = document.getElementById('writeMemBtn');
         const startDbgBtn   = document.getElementById('startDbgBtn');
         const nextBtn       = document.getElementById('nextBtn');
+        const contBtn       = document.getElementById('contBtn');
         const allFuncsBtn   = document.getElementById('allFuncsBtn');
         const breakBtn      = document.getElementById('breakBtn');
         const connIcon      = document.getElementById('connIcon');
@@ -130,8 +134,9 @@
             PROC_STEP_SINGLE        : 6,                // - 6
             PROC_FUNC_ALL           : 7,                // - 7
             PROC_FUNC_SINGLE        : 8,                // - 8
-            PROC_BREAK              : 9,                // - 9             
-            UNKNOWN_ACTION          : 10,               // - 10
+            PROC_BREAK              : 9,                // - 9         
+            PROC_CONT               : 10,               // - 10    
+            UNKNOWN_ACTION          : 11,               // - 11
         }
         const msg_handlers = [
             proc_start_dbg,
@@ -144,6 +149,7 @@
             proc_func_all,
             proc_func_single,
             proc_break,
+            proc_cont,
         ];
 
         let isConnected     = false;
@@ -207,6 +213,7 @@
         nextBtn.onclick     = () => proc_step_single();
         allFuncsBtn.onclick = () => proc_func_all();
         breakBtn.onclick    = () => proc_break();
+        contBtn.onclick     = () => proc_cont();
 
 
         function display_mem(data) {
@@ -475,6 +482,24 @@
                 console.log("bytes[]: ", bytes_arr);
                 console.log("keys[]: ", keys);
             }
+        }
+
+
+
+
+        function proc_cont(event = null)
+        {
+            console.log("calling func: proc_cont");
+            if(!event)
+            {
+                send_req(actions.PROC_CONT);
+                return;
+            }
+            if('resp' in event && 'mem' in event['resp'])
+            {
+
+            }
+
         }
     </script>
 </body>

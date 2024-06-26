@@ -363,6 +363,21 @@ ACT_HANDLR_START(proc_break)
     return proc_mem_read(cdb, args, resp_str);
 ACT_HANDLR_END
 
+
+
+ACT_HANDLR_START(proc_cont)
+    if(!proc_exists) goto failure;
+    if(_trace_proc_cont(pid->valueint) == -1)
+    {
+        goto failure;
+    }
+    unsigned long long rip = _trace_proc_get_ip(pid->valueint);
+    if(rip == -1) goto failure;
+    char addr[50];
+    snprintf(addr, sizeof(addr), "%llx", rip);
+    cJSON_AddStringToObject(resp_, "ip", addr);
+ACT_HANDLR_END
+
 int no_action()
 {
     return 0;

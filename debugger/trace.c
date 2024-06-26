@@ -58,6 +58,34 @@ int _trace_proc_start(char *procpath)
     return -1;
 }
 
+int _trace_proc_cont(pid_t pid)
+{
+    if(ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
+    {
+        printf("(ptrace) could not continue\n");
+        return -1;
+    }
+    int status;
+    waitpid(pid, &status, 0);
+    if(WIFEXITED(status)) 
+    {
+        printf("(exited) could not continue\n");
+        return -1;
+    }
+    return 0;
+}
+
+unsigned long long _trace_proc_get_ip(pid_t pid)
+{
+    struct user_regs_struct regs;
+    if(ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1)
+    {
+        printf("could not get ip\n");
+        return -1;
+    }
+    return regs.rip;
+}
+
 // continue &/or kill
 int _trace_proc_cont_kill(pid_t pid)
 {
@@ -65,7 +93,7 @@ int _trace_proc_cont_kill(pid_t pid)
     {
         if(ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
         {
-            perror(" _trace_proc_cont_kill: error running proc");
+            perror(" _trace_proc_cont_kill: error running proc\n");
             return -1;
         }
         int status;
@@ -77,7 +105,7 @@ int _trace_proc_cont_kill(pid_t pid)
 
         if(kill(pid, SIGKILL) == -1)
         {
-            perror(" _trace_proc_cont_kill: error terminating proc");
+            perror(" _trace_proc_cont_kill: error terminating proc\n");
             return -1;
         }
         return 0;
@@ -251,7 +279,6 @@ int _trace_proc_break(pid_t pid, void *remote_addr)
         {
             printf("(peek) could not read from address %s\n", strerror(errno));
             return -1;
-
         }
         long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
 
