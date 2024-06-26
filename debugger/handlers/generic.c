@@ -347,26 +347,16 @@ ACT_HANDLR_START(proc_break)
     if(break_addr == NULL) goto failure;
     void *addr = (char *)proc->exec_addr + strtoull(break_addr->valuestring, NULL, 16);
     printf("----------------\n");
-    printf("received break address: %p\n", addr);
+    printf("proc->base_address: %p\n", proc->exec_addr);
+    printf("setting break address: %p\n", addr);
     printf("----------------\n");
     if(_trace_proc_break(pid->valueint, addr) == -1)
     {
         goto failure;
     }
-    int index = proc_add_break(proc, &addr);
-    JSON *json = json_init("empty", NULL);
-    if (json)
-    {
-        char *addr_str = (char *)malloc(100);
-        // free
-        if(addr_str)
-        {
-            snprintf(addr_str, 100, "%p", addr);
-            cJSON_AddStringToObject(json, "read_address", addr_str);
-            cJSON_AddItemToObject(args, "read_address", json);
 
-        }
-    }
+    int index = proc_add_break(proc, &addr);
+    cJSON_AddStringToObject(args, "read_address", break_addr->valuestring);
     
     printf("bp added at index: %d\n", index);
     json_delete(resp);

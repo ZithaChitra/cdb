@@ -177,7 +177,7 @@ void *_trace_find_exec_addr(pid_t pid)
     {
         sscanf(line, "%lx-%*lx %s %*s %s %*d", &address, perms, str);
         printf("%s", line);
-        if(strstr(line, "x") != NULL){
+        if(strstr(line, "r") != NULL){
             break;
         }
     } 
