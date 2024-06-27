@@ -350,12 +350,13 @@ ACT_HANDLR_START(proc_break)
     printf("proc->base_address: %p\n", proc->exec_addr);
     printf("setting break address: %p\n", addr);
     printf("----------------\n");
-    if(_trace_proc_break(pid->valueint, addr) == -1)
+    long og_code = _trace_proc_break(pid->valueint, addr);
+    if(og_code == -1)
     {
         goto failure;
     }
 
-    int index = proc_add_break(proc, &addr);
+    int index = proc_add_breakp(proc, &addr, og_code);
     cJSON_AddStringToObject(args, "read_address", break_addr->valuestring);
     
     printf("bp added at index: %d\n", index);
@@ -367,15 +368,43 @@ ACT_HANDLR_END
 
 ACT_HANDLR_START(proc_cont)
     if(!proc_exists) goto failure;
+    PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
+    if(proc == NULL) goto failure;
+
     if(_trace_proc_cont(pid->valueint) == -1)
     {
         goto failure;
     }
-    unsigned long long rip = _trace_proc_get_ip(pid->valueint);
-    if(rip == -1) goto failure;
-    char addr[50];
+    struct user_regs_struct *regs = _trace_proc_get_regs(pid->valueint);
+    if(regs == NULL) goto failure;
+
+    regs->rip -= 1;
+    unsigned long long rip = regs->rip;
+    if (_trace_proc_set_regs(pid->valueint, regs) == -1)
+    {
+        free(regs);
+        goto failure;
+    }
+    
+    char addr[100];
+    char ogcode_str[100];
     snprintf(addr, sizeof(addr), "%llx", rip);
-    cJSON_AddStringToObject(resp_, "ip", addr);
+
+    BREAKP *bp = proc_find_breakp(proc, (void *)rip);
+    snprintf(ogcode_str, 100, "%lx", bp == NULL ? 0 : bp->og_code);
+
+
+    if(bp)
+    {
+        if(_trace_proc_rm_break(pid->valueint, bp->addr, bp->og_code) == 1)
+        {
+            printf("could not write to trace mem\n");
+        }
+    }
+
+    cJSON_AddStringToObject(resp_, "bp_ip", addr);
+    cJSON_AddStringToObject(resp_, "og_code", ogcode_str);
+    free(regs);
 ACT_HANDLR_END
 
 int no_action()

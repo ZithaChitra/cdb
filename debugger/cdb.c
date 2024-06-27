@@ -10,6 +10,7 @@
 #include "cdb.h"
 #include "data/hashmap.h"
 
+
 extern HANDLER_CDB action_handlers[];
 extern CDB *cdb_main;
 
@@ -48,26 +49,51 @@ void proc_delete(PROCESS *proc)
     free(proc);
 }
 
-int proc_add_break(PROCESS *proc, void **addr)
+BREAKP *breakp_init(void *addr, long og_code)
+{
+    BREAKP *breakp = (BREAKP *)malloc(sizeof(BREAKP));
+    if(breakp == NULL) return NULL;
+    breakp->addr    = addr;
+    breakp->og_code = og_code;
+    return breakp;
+}
+
+void breakp_delete(BREAKP *bp)
+{
+    if(bp == NULL) return;
+    free(bp);
+}
+
+BREAKP *proc_find_breakp(PROCESS *proc, void *addr) // find saved bp
+{
+    if(proc == NULL || addr == NULL) return NULL;
+    char addr_str[ADDR_LEN];
+    snprintf(addr_str, ADDR_LEN, "%p", addr);
+    printf("searching for breakpoint at addr: %s\n", addr_str);
+    HASHNODE *bpn = hashmap_find_node(proc->breaks, addr_str);
+    
+    if(bpn == NULL) return NULL;
+    return (BREAKP *)bpn->value;
+}
+
+
+int proc_add_breakp(PROCESS *proc, void **addr, long og_code)
 {
     if(proc == NULL || addr == NULL) return -1;
-    char addr_str[100];
-    int addr_len = 100;
-    snprintf(addr_str, addr_len, "%p", *addr);
-    char *key = (char *)malloc((addr_len + 1) * sizeof(char));
+    char addr_str[ADDR_LEN];
+    snprintf(addr_str, ADDR_LEN, "%p", *addr);
+
+    char *key = (char *)malloc((ADDR_LEN + 1) * sizeof(char));
     if(key == NULL) return -1;
-    char *value = (char *)malloc((addr_len + 1) * sizeof(char));
-    if(value == NULL)
+    strcpy(key, addr_str);
+
+    BREAKP *bp = breakp_init(*addr, og_code);
+    if(bp == NULL)
     {
         free(key);
         return -1;
     }
-    strcpy(key, addr_str);
-    strcpy(value, addr_str);
-
-    printf("Address: %p, addr_str: %s, key: %s, value: %s\n", *addr, addr_str, key, value);
-
-    return hashmap_insert_node(proc->breaks, key, (void *)value);
+    return hashmap_insert_node(proc->breaks, key, (void *)bp);
 }
 
 int proc_rm_break(PROCESS *proc, char *addr)

@@ -9,6 +9,7 @@
 #include "data/hashmap.h"
 
 #define MAX_PROC 1
+#define ADDR_LEN 100
 
 typedef struct process
 {
@@ -19,6 +20,13 @@ typedef struct process
     HASHMAP *breaks;
 } PROCESS;
 
+
+typedef struct breakp
+{
+    void *addr;
+    long og_code;
+} BREAKP;
+
 typedef struct cdb
 {
     int proc_curs;
@@ -27,8 +35,12 @@ typedef struct cdb
 
 PROCESS *proc_init(pid_t pid);
 void proc_delete(PROCESS *proc);
-int proc_add_break(PROCESS *proc, void **addr);
+int proc_add_breakp(PROCESS *proc, void **addr, long og_code);
+BREAKP *proc_find_breakp(PROCESS *proc, void *addr); // find saved bp
 int proc_rm_break(PROCESS *proc, char *addr);
+
+BREAKP *breakp_init(void *addr, long og_code);
+void breakp_delete(BREAKP *bp);
 
 CDB *cdb_init();
 int cdb_has_proc(CDB *cdb, pid_t pid);

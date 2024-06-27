@@ -178,6 +178,16 @@ struct user_regs_struct *_trace_proc_get_regs(pid_t pid)
     return regs;
 }
 
+int _trace_proc_set_regs(pid_t pid, struct user_regs_struct *regs)
+{
+    if(pid && regs)
+    {
+        return ptrace(PTRACE_SETREGS, pid, NULL, regs);
+    }
+    return -1;
+}
+
+
 void *_trace_find_exec_addr(pid_t pid)
 {
     if(!pid)
@@ -248,51 +258,51 @@ struct iovec *_trace_proc_mem_read(pid_t pid, void *remote_addr, size_t len)
 
 int _trace_proc_mem_write(pid_t pid, void *remote_addr, void *local_addr, size_t len)
 {
-    // errno = 0;
-    // struct iovec local_iovec = {
-    //     .iov_base   = local_addr,
-    //     .iov_len    = len
-    // };
-    // struct iovec remote_iovec = {
-    //     .iov_base   = remote_addr,
-    //     .iov_len    = len
-    // };
+    errno = 0;
+    struct iovec local_iovec = {
+        .iov_base   = local_addr,
+        .iov_len    = len
+    };
+    struct iovec remote_iovec = {
+        .iov_base   = remote_addr,
+        .iov_len    = len
+    };
 
-    // size_t b_written = process_vm_writev(pid, &local_iovec, 1, &remote_iovec, 1, 0);
-    // if(b_written == -1) return -errno;
-    // return (int)b_written;
-    long og_code = ptrace(PTRACE_PEEKTEXT, pid, remote_addr, NULL);
-    if(og_code == -1) return -1;
-    long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
-    return ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
+    size_t b_written = process_vm_writev(pid, &local_iovec, 1, &remote_iovec, 1, 0);
+    if(b_written == -1) 
+    {
+        printf("could not write to child process memory\n");
+    }
+    return b_written;
 }
 
 
 
-int _trace_proc_break(pid_t pid, void *remote_addr)
+long _trace_proc_break(pid_t pid, void *remote_addr)
 {
     errno = 0;
     if(pid && remote_addr)
     {
         long og_code = ptrace(PTRACE_PEEKTEXT, pid, remote_addr, NULL);
-        if(og_code == -1) 
-        {
-            printf("(peek) could not read from address %s\n", strerror(errno));
-            return -1;
-        }
-        long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
+        if(og_code == -1) return -1;
 
-        int res = ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
-        if(res == -1)
-        {
-            printf("(poke) could not read from address %s\n", strerror(errno));
-        }
-        return res;
+        long md_code = (og_code & 0xFFFFFFFFFFFFFF00) | 0xCC;
+        int res      = ptrace(PTRACE_POKETEXT, pid, remote_addr, md_code);
+        if(res == -1) return -1;
+        return og_code;
     }
     return -1;
 }
 
 
+int _trace_proc_rm_break(pid_t pid, void *remote_addr, long og_code)
+{
+    if(remote_addr && og_code)
+    {
+        return ptrace(PTRACE_POKETEXT, pid, remote_addr, og_code);
+    }
+    return -1;
+}
 
 
 
