@@ -20,4 +20,4 @@ add_executable(cdb
     $<TARGET_OBJECTS:cdblib>
     )
 
-target_link_libraries(cdb server ssl crypto cjson dwarf elf z)
+target_link_libraries(cdb server ssl crypto cjson dwarf elf z unwind-ptrace unwind unwind-x86_64)

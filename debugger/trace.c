@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <libunwind.h>
+#include <libunwind-ptrace.h>
 #include "trace.h"
 
 #ifndef WORD
@@ -58,6 +60,63 @@ int _trace_proc_start(char *procpath)
     return -1;
 }
 
+void print_stack_frames(pid_t child_pid) 
+{
+    unw_addr_space_t as;
+    unw_cursor_t cursor;
+    struct UPT_info *context;
+
+    as = unw_create_addr_space(&_UPT_accessors, 0);
+    if (!as) 
+    {
+        fprintf(stderr, "unw_create_addr_space failed\n");
+        return;
+    }
+
+    context = _UPT_create(child_pid);
+    if (!context) 
+    {
+        fprintf(stderr, "_UPT_create failed\n");
+        unw_destroy_addr_space(as);
+        return;
+    }
+
+    if (unw_init_remote(&cursor, as, context) != 0) 
+    {
+        fprintf(stderr, "unw_init_remote failed\n");
+        _UPT_destroy(context);
+        unw_destroy_addr_space(as);
+        return;
+    }
+
+    unw_word_t ip, sp;
+    char proc_name[256];
+    unw_word_t offset;
+    int frame = 0;
+    do {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) 
+            || unw_get_reg(&cursor, UNW_REG_SP, &sp)) 
+        {
+            fprintf(stderr, "unw_get_reg failed\n");
+            break;
+        }
+
+        if (unw_get_proc_name(&cursor, proc_name, sizeof(proc_name), &offset) == 0) 
+        {
+            printf("Frame %d: ip = 0x%lx, sp = 0x%lx, function = %s+0x%lx\n", 
+                   frame, (long)ip, (long)sp, proc_name, (long)offset);
+        } else {
+            printf("Frame %d: ip = 0x%lx, sp = 0x%lx, function = <unknown>\n", 
+                   frame, (long)ip, (long)sp);
+        }
+
+        frame++;
+    } while (unw_step(&cursor) > 0);
+
+    _UPT_destroy(context);
+    unw_destroy_addr_space(as);
+}
+
 int _trace_proc_cont(pid_t pid)
 {
     if(ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
@@ -72,6 +131,9 @@ int _trace_proc_cont(pid_t pid)
         printf("(exited) could not continue\n");
         return -1;
     }
+    print_stack_frames(pid);
+
+    
     return 0;
 }
 
