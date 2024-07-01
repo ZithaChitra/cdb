@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include "json.h"
 #include "data/hashmap.h"
+#include "data/list.h"
 
 #define MAX_PROC 1
 #define ADDR_LEN 100
@@ -18,6 +19,7 @@ typedef struct process
     void *exec_addr; // text addr
     Dwarf_Debug dw_dbg;
     HASHMAP *breaks;
+    LIST *list_node;
 } PROCESS;
 
 
@@ -31,6 +33,9 @@ typedef struct cdb
 {
     int proc_curs;
     PROCESS *all_proc[MAX_PROC];
+    LIST *all_procs;
+    
+
 } CDB;
 
 PROCESS *proc_init(pid_t pid);

@@ -9,6 +9,7 @@
 #include "trace.h"
 #include "cdb.h"
 #include "data/hashmap.h"
+#include "data/list.h"
 
 
 extern HANDLER_CDB action_handlers[];
@@ -24,6 +25,13 @@ PROCESS *proc_init(pid_t pid)
         free(proc);
         return NULL;
     }
+    proc->list_node = list_init();
+    if(proc->list_node == NULL)
+    {
+        free(proc->breaks);
+        free(proc);
+        return NULL;
+    }
     proc->pid       = pid;
     proc->src       = NULL;
     proc->exec_addr = _trace_find_exec_addr(pid);
@@ -34,6 +42,7 @@ PROCESS *proc_init(pid_t pid)
 void proc_delete(PROCESS *proc)
 {
     if(proc == NULL) return;
+    // list_rm_node(proc->list_node);
     if(proc->dw_dbg)
     {
         Dwarf_Error err;
@@ -108,6 +117,12 @@ CDB *cdb_init()
     CDB *cdb = (CDB *)malloc(sizeof(CDB)); 
     if(cdb == NULL) return NULL;
     cdb->proc_curs = 0;
+    cdb->all_procs = list_init();
+    if(cdb->all_procs == NULL)
+    {
+        free(cdb);
+        return NULL;
+    }
     return cdb;
 }
 
@@ -115,9 +130,11 @@ void cdb_delete()
 {
     printf("------cdb_delete start------------------\n");
     if(cdb_main == NULL) return;
-    for (size_t i = 0; i < cdb_main->proc_curs; i++)
+    PROCESS *proc = NULL;
+    LIST *curs    = NULL;
+    LIST_FOR_EACH(curs, cdb_main->all_procs)
     {
-        PROCESS *proc = cdb_main->all_proc[i];
+        proc = LIST_PARENT(curs, PROCESS, list_node);
         if(proc == NULL) continue;
         printf("removing pid: %d\n", proc->pid);
         if (_trace_is_proc_attached(proc->pid))
@@ -125,6 +142,13 @@ void cdb_delete()
            _trace_proc_cont_kill(proc->pid);
         }
         proc_delete(proc);
+    }
+    LIST *curr = NULL;
+    for(curs = cdb_main->all_procs; curs != NULL;)
+    {
+        curr = curs;
+        curs = curs->next;
+        list_rm_node(curr);
     }
     free(cdb_main);
     printf("------cdb_delete end------------------\n");
@@ -181,9 +205,11 @@ JSON *cdb_exec_action(CDB *cdb, JSON *action, char **resp_str)
 int cdb_has_proc(CDB *cdb, pid_t pid)
 {
     if (cdb == NULL) return -1;
-    for (size_t i = 0; i < cdb->proc_curs; i++)
+    PROCESS *proc = NULL;
+    LIST *curs    = NULL;
+    LIST_FOR_EACH(curs, cdb->all_procs)
     {
-        PROCESS *proc = cdb->all_proc[i];
+        proc = LIST_PARENT(curs, PROCESS, list_node);
         if(proc == NULL) continue;
         if(proc->pid == pid) return 1;
     }
@@ -194,43 +220,43 @@ PROCESS *cdb_find_proc(CDB *cdb, pid_t pid)
 {
     if(cdb == NULL) return NULL;
     PROCESS *proc = NULL;
-    for (size_t i = 0; i < cdb->proc_curs; i++)
+    LIST *curs    = NULL;
+    LIST_FOR_EACH(curs, cdb->all_procs)
     {
-        proc = cdb->all_proc[i];
-        if(proc == NULL) continue;
-        if(proc->pid == pid) return proc;
+        proc = LIST_PARENT(curs, PROCESS, list_node);
+        if(proc != NULL) if(proc->pid == pid) return proc;
     }
     return NULL;
 }
 
 int cdb_add_proc(CDB *cdb, PROCESS *proc)
 {
-    if(cdb->proc_curs < MAX_PROC)
+    LIST *curs = NULL;
+    for (curs = cdb->all_procs; curs != NULL; curs = curs->next)
     {
-        cdb->all_proc[cdb->proc_curs] = proc;
-        cdb->proc_curs++;
-        return 0;
+        if(curs->next == NULL) 
+        {
+            curs->next = proc->list_node;
+            return 0;
+        }
     }
     return -1;
 }
 
 int cdb_remove_proc(CDB *cdb, pid_t pid, int index)
 {
-    if(cdb  == NULL) return -1;
-    PROCESS *proc;
-    if(index == -1) // we dont know the proc index
+    if(cdb == NULL) return -1;
+    PROCESS *proc = NULL;
+    LIST *curs    = NULL;
+    LIST_FOR_EACH(curs, cdb->all_procs)
     {
-        for (size_t i = 0; i < cdb->proc_curs; i++)
+        proc = LIST_PARENT(curs, PROCESS, list_node);
+        if(proc != NULL && proc->pid == pid)
         {
-            proc = cdb->all_proc[i];
-            if(proc == NULL) continue;
-            if(proc->pid == pid) proc_delete(proc);
+            list_rm_node(curs);
+            return 0;
         }
-        return 0;
     }
-
-    proc = cdb->all_proc[index];
-    if(proc == NULL) return -1;
     proc_delete(proc);
     return 0;
 }
