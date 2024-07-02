@@ -236,7 +236,8 @@ int cdb_add_proc(CDB *cdb, PROCESS *proc)
     {
         if(curs->next == NULL) 
         {
-            curs->next = proc->list_node;
+            size_t offset = offsetof(PROCESS, list_node);
+            curs->next = (LIST *)((char*)proc + offset);
             return 0;
         }
     }
