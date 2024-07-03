@@ -34,7 +34,7 @@ PROCESS *proc_init(pid_t pid)
     }
     proc->pid       = pid;
     proc->src       = NULL;
-    proc->exec_addr = _trace_find_exec_addr(pid);
+    proc->base_addr = _trace_find_base_addr(pid);
     proc->dw_dbg    = 0;
     return proc;
 }

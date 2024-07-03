@@ -16,7 +16,7 @@ typedef struct process
 {
     pid_t pid;
     FILE *src;
-    void *exec_addr; // text addr
+    void *base_addr; // base address where proc is loaded in memory
     Dwarf_Debug dw_dbg;
     HASHMAP *breaks;
     LIST *list_node;
@@ -56,3 +56,4 @@ JSON *cdb_exec_action(CDB *cdb, JSON* action, char **resp_str);
 void cdb_delete();
 
 #endif
+

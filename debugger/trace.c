@@ -250,7 +250,7 @@ int _trace_proc_set_regs(pid_t pid, struct user_regs_struct *regs)
 }
 
 
-void *_trace_find_exec_addr(pid_t pid)
+void *_trace_find_base_addr(pid_t pid)
 {
     if(!pid)
     {

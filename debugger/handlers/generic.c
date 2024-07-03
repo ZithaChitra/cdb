@@ -227,12 +227,12 @@ ACT_HANDLR_START(proc_mem_read)
     void *read_addr = 0;
     if(addr == NULL)
     {
-        read_addr = proc->exec_addr;
-        printf("proc exec: %p\n", proc->exec_addr);
+        read_addr = proc->base_addr;
+        printf("proc exec: %p\n", proc->base_addr);
         printf("proc read_address not set\n");
     }else{
-        read_addr = (char *)proc->exec_addr + strtoull(addr->valuestring, NULL, 16);
-        printf("proc exec: %p\n", proc->exec_addr);
+        read_addr = (char *)proc->base_addr + strtoull(addr->valuestring, NULL, 16);
+        printf("proc exec: %p\n", proc->base_addr);
         printf("proc read_address: %p\n", read_addr);
     }
 
@@ -267,10 +267,10 @@ ACT_HANDLR_START(proc_mem_write)
     printf("-------------------------------\n");
     printf("generic: proc_mem_write\n");
     if(!proc_exists) goto failure;
-    unsigned long long exec_addr = _trace_find_exec_addr(pid->valueint);
-    printf("(write mem) exec address- %llu\n", exec_addr);
+    unsigned long long base_addr = _trace_find_base_addr(pid->valueint);
+    printf("(write mem) exec address- %llu\n", base_addr);
     unsigned char trap = 0xCC;
-    int res = _trace_proc_mem_write(pid->valueint, (void *)exec_addr, &trap, sizeof(trap));
+    int res = _trace_proc_mem_write(pid->valueint, (void *)base_addr, &trap, sizeof(trap));
     if(res < 0)
     {
         int err_code = -res;
@@ -345,9 +345,9 @@ ACT_HANDLR_START(proc_break)
 
     JSON *break_addr = json_get_value(args, "break_address");
     if(break_addr == NULL) goto failure;
-    void *addr = (char *)proc->exec_addr + strtoull(break_addr->valuestring, NULL, 16);
+    void *addr = (char *)proc->base_addr + strtoull(break_addr->valuestring, NULL, 16);
     printf("----------------\n");
-    printf("proc->base_address: %p\n", proc->exec_addr);
+    printf("proc->base_address: %p\n", proc->base_addr);
     printf("setting break address: %p\n", addr);
     printf("----------------\n");
     long og_code = _trace_proc_break(pid->valueint, addr);
