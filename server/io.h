@@ -13,35 +13,26 @@
 #define PORT 8080
 #endif
 
-struct E_IO;
+struct FD;
 
-typedef void (*Handler_IO)(struct E_IO *self, struct pollfd *);
+typedef void (*HANDLER_FD)(struct FD *self, struct pollfd *);
 
-typedef struct E_IO
-{
+typedef struct FD
+{ 
     int         sys_fd;
     int         pos;
-    char        *type;
-    Handler_IO  eventHandler;
-} E_IO;
+    HANDLER_FD  event_handler;
+} FD;
 
-typedef struct E_IO_SERV    
-{
-    E_IO io;
-} E_IO_SERV;
 
-typedef struct E_IO_CONN
-{
-    E_IO io;
-} E_IO_CONN;
+int add_fd_to_tables(FD *fd);
+int rm_fd_from_tables(FD *fd);
 
-int addnewIOEnt(E_IO *);
-int removeIOEnt(E_IO *);
+FD *fd_init(int sys_fd, HANDLER_FD handler);
+int fd_del(FD *fd);
 
-void initEntIO(E_IO *, Handler_IO, char*);
+void handle_connected_fd(FD *self, struct pollfd*);
+void handle_listening_fd(FD *self, struct pollfd*);
 
-void connEventHandler(E_IO *self, struct pollfd*);
-void servEventHandler(E_IO *self, struct pollfd*);
-
-void mainIO();
+void main_io();
 #endif

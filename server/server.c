@@ -20,6 +20,6 @@
 
 int sys_start() {
     printf("updated server has started\n");
-    mainIO();
+    main_io();
     return 0;
 }
