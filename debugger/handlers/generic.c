@@ -135,7 +135,7 @@ ACT_HANDLR_START(proc_end_dbg)
     {
         printf("process already attached\n");
         if(_trace_proc_cont_kill(pid->valueint) == -1) return -1;
-        if(cdb_remove_proc(cdb, pid->valueint, -1) == -1) return -1;
+        if(cdb_remove_proc(cdb, pid->valueint) == -1) return -1;
         return -1;
     }
     // TODO

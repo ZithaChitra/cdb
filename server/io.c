@@ -78,8 +78,8 @@ FD *fd_init(int sys_fd, HANDLER_FD handler)
     FD *fd = (FD *)malloc(sizeof(FD));
     if(fd == NULL) return NULL;
 
-    fd->pos          = -1;
-    fd->sys_fd       = sys_fd;
+    fd->pos           = -1;
+    fd->sys_fd        = sys_fd;
     fd->event_handler = handler;
     return fd;
 }
@@ -129,21 +129,23 @@ int fd_del(FD *fd)
     return 0;
 }
 
-void handle_connected_fd(FD *io_con, struct pollfd *event)
+void handle_connected_fd(FD *fd, struct pollfd *event)
 {
     if(event->revents & (POLLERR | POLLHUP))
     {
-        rm_fd_from_tables(io_con);
-        fd_del(io_con);
+        rm_fd_from_tables(fd);
+        fd_del(fd);
         return 0;
     }
     if(event->revents & POLLIN)
     {
-        int client_socket = io_con->sys_fd;
+        int client_socket = fd->sys_fd;
         char buffer[BUFFER_SIZE];
 
         int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
         if (bytes_received <= 0) {
+            rm_fd_from_tables(fd);
+            fd_del(fd);
             return;
         }
 
@@ -287,6 +289,8 @@ void handle_listening_fd(FD *fd, struct pollfd *event)
 {
     if(event->revents & (POLLHUP | POLLERR))
     {
+        perror("handle listening fd");
+        exit(EXIT_FAILURE);
         // rm_fd_from_tables(fd);
         // fd_del(fd);
         return;
@@ -355,8 +359,8 @@ void sock_main_init()
 
 void main_io()
 {
-    idx_arr_init(fds_free_list, MAX_IO_ENTITIES);
     fd_tables_init();
+    idx_arr_init(fds_free_list, MAX_IO_ENTITIES);
 
     sock_main_init();
     cdb_main = cdb_init();

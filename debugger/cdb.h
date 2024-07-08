@@ -51,7 +51,7 @@ CDB *cdb_init();
 int cdb_has_proc(CDB *cdb, pid_t pid);
 PROCESS *cdb_find_proc(CDB *cdb, pid_t pid);
 int cdb_add_proc(CDB *cdb, PROCESS *proc);
-int cdb_remove_proc(CDB *cdb, pid_t pid, int index);
+int cdb_remove_proc(CDB *cdb, pid_t pid);
 JSON *cdb_exec_action(CDB *cdb, JSON* action, char **resp_str);
 void cdb_delete();
 

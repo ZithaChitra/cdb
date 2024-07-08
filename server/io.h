@@ -3,7 +3,7 @@
 
 #include <poll.h>
 
-#define MAX_IO_ENTITIES 2
+#define MAX_IO_ENTITIES 5
 
 #ifndef BUFFER_SIZE
 #define BUFFER_SIZE 15000

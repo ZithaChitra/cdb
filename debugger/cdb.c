@@ -244,7 +244,7 @@ int cdb_add_proc(CDB *cdb, PROCESS *proc)
     return -1;
 }
 
-int cdb_remove_proc(CDB *cdb, pid_t pid, int index)
+int cdb_remove_proc(CDB *cdb, pid_t pid)
 {
     if(cdb == NULL) return -1;
     PROCESS *proc = NULL;
