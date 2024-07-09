@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <sys/socket.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -17,6 +18,8 @@
 #include "json.h"
 #include "cdb.h"
 #include "signalcdb.h"
+
+extern HANDLER_CDB action_handlers[];
 
 static struct pollfd epoll_events[MAX_IO_ENTITIES];
 static FD  *fd_objs_arr[MAX_IO_ENTITIES];
@@ -69,7 +72,6 @@ int idx_arr_free(int idx_arr[], int *curr_head, int idx)
     return 0;
 }
 
-extern HANDLER_CDB action_handlers[];
 
 FD *fd_init(int sys_fd, HANDLER_FD handler)
 {
@@ -129,13 +131,22 @@ int fd_del(FD *fd)
     return 0;
 }
 
+
+void connected_fd_cleanup(FD *fd)
+{
+    rm_fd_from_tables(fd);
+    cdb_rm_conn_procs(cdb_main, fd->sys_fd);
+    fd_del(fd);
+    return;
+}
+
+
 void handle_connected_fd(FD *fd, struct pollfd *event)
 {
     if(event->revents & (POLLERR | POLLHUP))
     {
-        rm_fd_from_tables(fd);
-        fd_del(fd);
-        return 0;
+        connected_fd_cleanup(fd);
+        return;
     }
     if(event->revents & POLLIN)
     {
@@ -144,8 +155,7 @@ void handle_connected_fd(FD *fd, struct pollfd *event)
 
         int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
         if (bytes_received <= 0) {
-            rm_fd_from_tables(fd);
-            fd_del(fd);
+            connected_fd_cleanup(fd);
             return;
         }
 
@@ -188,7 +198,7 @@ void handle_connected_fd(FD *fd, struct pollfd *event)
             fprintf(stderr, "Error parsing JSON\n");
             return;
         }else{
-            cdb_exec_action(cdb_main, json, &resp_str);
+            cdb_exec_action(cdb_main, json, &resp_str, fd->sys_fd);
         }
 
         // cJSON_Delete(json);

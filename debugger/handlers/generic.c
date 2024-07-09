@@ -68,7 +68,10 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
     int pathlen = strlen(procpath->valuestring);
     char *path = (char *)malloc(pathlen);
     if(path == NULL) return -1;
-    PROCESS *proc = proc_init(pid);
+    cJSON_Print(args);
+
+    JSON *ws_fd   = json_get_value(args, "ws_fd");
+    PROCESS *proc = proc_init(pid, ws_fd->valueint);
     if(proc == NULL)
     {
         printf("could not allocate memory for new process\n");

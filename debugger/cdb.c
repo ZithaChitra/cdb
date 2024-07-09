@@ -15,7 +15,7 @@
 extern HANDLER_CDB action_handlers[];
 extern CDB *cdb_main;
 
-PROCESS *proc_init(pid_t pid)
+PROCESS *proc_init(pid_t pid, int ws_fd)
 {
     PROCESS *proc = (PROCESS *)malloc(sizeof(PROCESS));
     if(proc == NULL) return NULL;
@@ -33,6 +33,7 @@ PROCESS *proc_init(pid_t pid)
         return NULL;
     }
     proc->pid       = pid;
+    proc->ws_fd     = ws_fd;
     proc->src       = NULL;
     proc->base_addr = _trace_find_base_addr(pid);
     proc->dw_dbg    = 0;
@@ -55,6 +56,10 @@ void proc_delete(PROCESS *proc)
     }
     if(proc->src) fclose(proc->src);
     // free breaks hashamp
+    if (_trace_is_proc_attached(proc->pid))
+    {
+        _trace_proc_kill(proc->pid);
+    }
     free(proc);
 }
 
@@ -128,7 +133,6 @@ CDB *cdb_init()
 
 void cdb_delete()
 {
-    printf("------cdb_delete start------------------\n");
     if(cdb_main == NULL) return;
     PROCESS *proc = NULL;
     LIST *curs    = NULL;
@@ -136,27 +140,21 @@ void cdb_delete()
     {
         proc = LIST_PARENT(curs, PROCESS, list_node);
         if(proc == NULL) continue;
-        printf("removing pid: %d\n", proc->pid);
-        if (_trace_is_proc_attached(proc->pid))
-        {
-           _trace_proc_cont_kill(proc->pid);
-        }
+        list_rm_node(curs);
         proc_delete(proc);
     }
-    LIST *curr = NULL;
-    for(curs = cdb_main->all_procs; curs != NULL;)
-    {
-        curr = curs;
-        curs = curs->next;
-        list_rm_node(curr);
-    }
+    // LIST *curr = NULL;
+    // for(curs = cdb_main->all_procs; curs != NULL;)
+    // {
+    //     curr = curs;
+    //     curs = curs->next;
+    // }
     free(cdb_main);
-    printf("------cdb_delete end------------------\n");
     exit(EXIT_SUCCESS);
 } 
 
 
-JSON *cdb_exec_action(CDB *cdb, JSON *action, char **resp_str)
+JSON *cdb_exec_action(CDB *cdb, JSON *action, char **resp_str, int ws_fd)
 {
     /*
         most importantly is that an action should 
@@ -179,6 +177,8 @@ JSON *cdb_exec_action(CDB *cdb, JSON *action, char **resp_str)
     }
     JSON *actid = json_get_value(action, "actid");
     JSON *args  = json_get_value(action, "args");
+
+    cJSON_AddNumberToObject(args, "ws_fd", ws_fd);
 
     if(actid == NULL)
     {
@@ -236,8 +236,10 @@ int cdb_add_proc(CDB *cdb, PROCESS *proc)
     {
         if(curs->next == NULL) 
         {
-            size_t offset = offsetof(PROCESS, list_node);
-            curs->next = (LIST *)((char*)proc + offset);
+            // size_t offset = offsetof(PROCESS, list_node);
+            // curs->next = (LIST *)((char*)proc + offset);
+            // LIST *list_node = (LIST *)((char*)proc + offset);
+            list_insert_after(curs, proc->list_node);
             return 0;
         }
     }
@@ -249,7 +251,7 @@ int cdb_remove_proc(CDB *cdb, pid_t pid)
     if(cdb == NULL) return -1;
     PROCESS *proc = NULL;
     LIST *curs    = NULL;
-    LIST_FOR_EACH(curs, cdb->all_procs)
+    for (curs = cdb->all_procs; curs != NULL; curs = curs->next)
     {
         proc = LIST_PARENT(curs, PROCESS, list_node);
         if(proc != NULL && proc->pid == pid)
@@ -260,4 +262,23 @@ int cdb_remove_proc(CDB *cdb, pid_t pid)
     }
     proc_delete(proc);
     return 0;
+}
+
+void cdb_rm_conn_procs(CDB *cdb, int conn_fd)
+{
+    if(cdb == NULL) return;
+    PROCESS *proc = NULL;
+    LIST    *curs = NULL;
+    for (curs = cdb->all_procs; curs != NULL; curs = curs->next)
+    {
+        // proc = LIST_PARENT(curs, PROCESS, list_node);
+        size_t offset = offsetof(PROCESS, list_node);
+        proc = (PROCESS *)((char*)curs - offset);
+        if(proc != NULL && proc->ws_fd == conn_fd)
+        {
+            list_rm_node(curs);
+            proc_delete(proc);
+        }
+    }
+    return;   
 }

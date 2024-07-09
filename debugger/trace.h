@@ -26,6 +26,7 @@ int _trace_proc_mem_write(pid_t pid, void *remote_addr, void *local_addr, size_t
 long _trace_proc_break(pid_t pid, void *remote_addr);
 int _trace_proc_rm_break(pid_t pid, void *remote_addr, long og_code);
 int _trace_proc_cont(pid_t pid);
+void  _trace_proc_kill(pid_t pid);
 unsigned long long _trace_proc_get_ip(pid_t pid);
 
 #endif

@@ -30,7 +30,7 @@ int list_insert_after(LIST *list, LIST *node)
 {
     if(list == NULL || node == NULL) return -1;
     node->next = list->next;
-    (node->next != NULL) ? node->next->prev = node : NULL;
+    if(node->next != NULL) node->next->prev = node;
     node->prev = list;
     list->next = node;
     return 0;
@@ -51,8 +51,8 @@ int list_insert_before(LIST *list, LIST *node)
 int list_rm_node(LIST *list)
 {
     if(list == NULL) return -1;
-    list->prev ? list->prev->next = list->next : NULL;
-    list->next ? list->next->prev = list->prev : NULL;
+    if(list->prev)  list->prev->next = list->next;
+    if(list->next ) list->next->prev = list->prev;
     free(list);
     return 0;
 }

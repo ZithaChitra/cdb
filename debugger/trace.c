@@ -137,6 +137,13 @@ int _trace_proc_cont(pid_t pid)
     return 0;
 }
 
+void _trace_proc_kill(pid_t pid)
+{
+    ptrace(PTRACE_KILL, pid, NULL, NULL);
+    return;
+}
+
+
 unsigned long long _trace_proc_get_ip(pid_t pid)
 {
     struct user_regs_struct regs;
