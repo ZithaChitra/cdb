@@ -53,7 +53,6 @@ int list_rm_node(LIST *list)
     if(list == NULL) return -1;
     if(list->prev)  list->prev->next = list->next;
     if(list->next ) list->next->prev = list->prev;
-    free(list);
     return 0;
 }
 

@@ -25,13 +25,8 @@ PROCESS *proc_init(pid_t pid, int ws_fd)
         free(proc);
         return NULL;
     }
-    proc->list_node = list_init();
-    if(proc->list_node == NULL)
-    {
-        free(proc->breaks);
-        free(proc);
-        return NULL;
-    }
+    proc->list_node.next = NULL;
+    proc->list_node.prev = NULL;
     proc->pid       = pid;
     proc->ws_fd     = ws_fd;
     proc->src       = NULL;
@@ -239,7 +234,7 @@ int cdb_add_proc(CDB *cdb, PROCESS *proc)
             // size_t offset = offsetof(PROCESS, list_node);
             // curs->next = (LIST *)((char*)proc + offset);
             // LIST *list_node = (LIST *)((char*)proc + offset);
-            list_insert_after(curs, proc->list_node);
+            list_insert_after(curs, &proc->list_node);
             return 0;
         }
     }
@@ -271,9 +266,7 @@ void cdb_rm_conn_procs(CDB *cdb, int conn_fd)
     LIST    *curs = NULL;
     for (curs = cdb->all_procs; curs != NULL; curs = curs->next)
     {
-        // proc = LIST_PARENT(curs, PROCESS, list_node);
-        size_t offset = offsetof(PROCESS, list_node);
-        proc = (PROCESS *)((char*)curs - offset);
+        proc = LIST_PARENT(curs, PROCESS, list_node);
         if(proc != NULL && proc->ws_fd == conn_fd)
         {
             list_rm_node(curs);

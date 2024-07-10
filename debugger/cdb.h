@@ -18,7 +18,7 @@ typedef struct process
     int         ws_fd;          // the connected fd that started this process
     FILE        *src;
     void        *base_addr;     // base address where proc is loaded in memory
-    LIST        *list_node;     // entry in CDB process list
+    LIST        list_node;      // entry in CDB process list
     HASHMAP     *breaks;        // break points
     Dwarf_Debug dw_dbg;         
 } PROCESS;
