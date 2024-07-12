@@ -12,6 +12,7 @@
 #include "json.h"
 #include "trace.h"
 #include "resolve.h"
+#include "fd.h"
 #include "data/hashmap.h"
 
 // action handler def
@@ -59,14 +60,14 @@
 int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
 {
     printf("handler: proc_start_debug");
-    JSON *procpath = json_get_value(args, "path");
-    printf("proc path: %s\n", procpath->valuestring);
-    pid_t pid = _trace_proc_start(procpath->valuestring);
-    printf("started process: %d\n", pid);
+
+    JSON *procpath  = json_get_value(args, "path");
+    int proc_stdout = 0;
+    pid_t pid       = _trace_proc_start(procpath->valuestring, &proc_stdout);
     if(pid == -1) return -1;
 
     int pathlen = strlen(procpath->valuestring);
-    char *path = (char *)malloc(pathlen);
+    char *path  = (char *)malloc(pathlen);
     if(path == NULL) return -1;
     cJSON_Print(args);
 
@@ -109,6 +110,9 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
         proc_delete(proc);
         return -1;
     }
+
+    tracee_stdout_fd_init(proc_stdout, proc);
+
     JSON *resp = json_init("empty", NULL);
     if(resp == NULL)
     {

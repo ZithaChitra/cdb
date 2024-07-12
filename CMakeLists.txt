@@ -7,6 +7,7 @@ add_compile_options(-Wall -g)
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}/debugger")
+include_directories("${PROJECT_SOURCE_DIR}/server")
 
 add_subdirectory("server")
 add_subdirectory("debugger")

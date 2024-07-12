@@ -136,8 +136,11 @@
             PROC_FUNC_SINGLE        : 8,                // - 8
             PROC_BREAK              : 9,                // - 9         
             PROC_CONT               : 10,               // - 10    
-            UNKNOWN_ACTION          : 11,               // - 11
+            PROC_STDOUT             : 11,
+            PROC_STDIN              : 12,              
+            UNKNOWN_ACTION          : 13,               // - 11
         }
+
         const msg_handlers = [
             proc_start_dbg,
             proc_end_dbg,
@@ -150,6 +153,8 @@
             proc_func_single,
             proc_break,
             proc_cont,
+            proc_stdout,
+            proc_stdin
         ];
 
         let isConnected     = false;
@@ -284,6 +289,14 @@
 
         }
 
+        function proc_stdout()
+        {
+
+        }
+        function proc_stdin()
+        {
+
+        }
 
         function proc_step_single(event = null)
         {

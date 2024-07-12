@@ -201,7 +201,7 @@ int cdb_has_proc(CDB *cdb, pid_t pid)
 {
     if (cdb == NULL) return -1;
     PROCESS *proc = NULL;
-    LIST *curs    = NULL;
+    LIST    *curs = NULL;
     LIST_FOR_EACH(curs, cdb->all_procs)
     {
         proc = LIST_PARENT(curs, PROCESS, list_node);

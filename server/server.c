@@ -9,17 +9,15 @@
 #include <stdint.h>
 #include <errno.h>
 #include <cjson/cJSON.h>
-#include "tracer_bf.h"
-#include "io.h"
+#include "fd.h"
 
 #define MAX_EVENTS 10
 
 #define PORT 8080
 #define BUFFER_SIZE 15000
 
-
 int sys_start() {
     printf("updated server has started\n");
-    main_io();
+    fds_poll();
     return 0;
 }

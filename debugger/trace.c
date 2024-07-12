@@ -20,26 +20,37 @@
 
 extern char **environ;
 
-int _trace_proc_start(char *procpath)
+int _trace_proc_start(char *procpath, int *std_out)
 {
     printf("running: _trace_proc_start: %s\n", procpath);
     pid_t pid;
     int status;
+    int pipe_fds[2];
+
+    if(pipe(pipe_fds) == -1)
+    {
+        return -1;
+    }
 
     pid = fork();     
     if(pid == -1)
     {
-        printf("_trace_start_proc: could not fock\n ");
         return -1;
     }else if(pid == 0)
     {
-        printf("child: requesting trace me\n");
-        if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1)
+        close(pipe_fds[0]);
+
+        if(dup2(pipe_fds[1], STDOUT_FILENO) == -1)
         {
-            printf("_trace_start_proc: could not set traceme \n");
             return -1;
         }
-        char *testpath = "/media/pnorth/Chitra/cdb/cdb-server/build/demo";
+
+        close(pipe_fds[1]);
+
+        if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1)
+            return -1;
+
+        char *testpath = "/media/pnorth/Chitra/cdb/cdb-server/play/demo";
         char *args[2];
         args[0] = "demo";
         args[1] = NULL;
@@ -52,9 +63,10 @@ int _trace_proc_start(char *procpath)
         }
         return -1;
     }else{
-        printf("parent: waiting for child\n");
         waitpid(pid, &status, 0);
 
+        close(pipe_fds[1]);
+        *std_out = pipe_fds[0];
         return pid;
     }
     return -1;
@@ -62,9 +74,9 @@ int _trace_proc_start(char *procpath)
 
 void print_stack_frames(pid_t child_pid) 
 {
-    unw_addr_space_t as;
-    unw_cursor_t cursor;
-    struct UPT_info *context;
+    unw_addr_space_t    as;
+    unw_cursor_t        cursor;
+    struct UPT_info     *context;
 
     as = unw_create_addr_space(&_UPT_accessors, 0);
     if (!as) 
@@ -109,7 +121,6 @@ void print_stack_frames(pid_t child_pid)
             printf("Frame %d: ip = 0x%lx, sp = 0x%lx, function = <unknown>\n", 
                    frame, (long)ip, (long)sp);
         }
-
         frame++;
     } while (unw_step(&cursor) > 0);
 

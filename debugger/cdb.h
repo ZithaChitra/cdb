@@ -9,17 +9,19 @@
 #include "data/hashmap.h"
 #include "data/list.h"
 
-#define MAX_PROC 1
-#define ADDR_LEN 100
+#define MAX_PROC        1
+#define ADDR_LEN        100
+#define PROC_BUFF_SIZE  2024
 
 typedef struct process
 {
     pid_t       pid;
     int         ws_fd;          // the connected fd that started this process
     FILE        *src;
-    void        *base_addr;     // base address where proc is loaded in memory
-    LIST        list_node;      // entry in CDB process list
-    HASHMAP     *breaks;        // break points
+    void        *base_addr;     //  base address where proc is loaded in memory
+    LIST        list_node;      //  entry in CDB process list
+    void        *proc_buffer;   //  buffer for IO
+    HASHMAP     *breaks;        //  break points
     Dwarf_Debug dw_dbg;         
 } PROCESS;
 
@@ -35,7 +37,7 @@ typedef struct cdb
     int proc_curs;
     PROCESS *all_proc[MAX_PROC];
     LIST *all_procs;
-    
+
 
 } CDB;
 
@@ -44,6 +46,9 @@ void proc_delete(PROCESS *proc);
 int proc_add_breakp(PROCESS *proc, void **addr, long og_code);
 BREAKP *proc_find_breakp(PROCESS *proc, void *addr); // find saved bp
 int proc_rm_break(PROCESS *proc, char *addr);
+int proc_init_buffer();
+int proc_clear_buffer();
+int proc_delete_buffer();
 
 BREAKP *breakp_init(void *addr, long og_code);
 void breakp_delete(BREAKP *bp);

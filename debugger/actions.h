@@ -32,7 +32,9 @@ typedef enum cdb_actions{
     PROC_FUNC_SINGLE,           // - 8  : single function
     PROC_BREAK,                 // - 9  : set software breakpoint
     PROC_CONT,                  // - 10 : continue exec
-    UNKNOWN_ACTION,             // - 11
+    PROC_STDOUT,                // - 11 : data from tracee stdout
+    PROC_STDIN,                 // - 13 : data to tracee stdin
+    UNKNOWN_ACTION,             // - 14
 } CDB_ACTIONS;
 
 #endif

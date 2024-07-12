@@ -11,9 +11,8 @@
 #include <cjson/cJSON.h>
 #include <string.h>
 #include <poll.h>
-#include "io.h"
+#include "fd.h"
 #include "util.h"
-#include "tracer_bf.h"
 #include "actions.h"
 #include "json.h"
 #include "cdb.h"
@@ -72,7 +71,6 @@ int idx_arr_free(int idx_arr[], int *curr_head, int idx)
     return 0;
 }
 
-
 FD *fd_init(int sys_fd, HANDLER_FD handler)
 {
     if(handler == NULL) return NULL;
@@ -80,13 +78,14 @@ FD *fd_init(int sys_fd, HANDLER_FD handler)
     FD *fd = (FD *)malloc(sizeof(FD));
     if(fd == NULL) return NULL;
 
-    fd->pos           = -1;
-    fd->sys_fd        = sys_fd;
-    fd->event_handler = handler;
+    fd->pos             = -1;
+    fd->sys_fd          = sys_fd;
+    fd->proc            = NULL;
+    fd->event_handler   = handler;
     return fd;
 }
 
-int add_fd_to_tables(FD *fd)
+int fd_add_to_tables(FD *fd)
 {
     if(fd == NULL) return -1;
 
@@ -103,7 +102,7 @@ int add_fd_to_tables(FD *fd)
     return 0;
 }
 
-int rm_fd_from_tables(FD *fd)
+int fd_rm_from_tables(FD *fd)
 {
     if(fd == NULL) return -1;
     int idx = fd->pos;
@@ -131,14 +130,98 @@ int fd_del(FD *fd)
     return 0;
 }
 
-
 void connected_fd_cleanup(FD *fd)
 {
-    rm_fd_from_tables(fd);
+    fd_rm_from_tables(fd);
     cdb_rm_conn_procs(cdb_main, fd->sys_fd);
     fd_del(fd);
     return;
 }
+
+void tracee_stdout_fd_cleanup(FD *fd)
+{
+    fd_rm_from_tables(fd);
+    fd_del(fd);
+    return;
+}
+
+void ws_send(int fd, void *data, size_t len)
+{
+    int offset = 2;
+    unsigned char response_frame[BUFFER_SIZE];
+    response_frame[0] = 0x81; // FIN bit set and text frame opcode (0x1)
+    if (len <= 125) 
+    {
+        response_frame[1] = (unsigned char)len;
+        offset = 2;
+    } else if (len <= 65535) {
+        response_frame[1] = 126;
+        *(uint16_t *)(response_frame + 2) = htons((uint16_t)len);
+        offset = 4;
+    } else {
+        response_frame[1] = 127;
+        *(uint64_t *)(response_frame + 2) = htobe64(len);
+        offset = 10;
+    }
+    memcpy(response_frame + offset, data, len);
+    send(fd, response_frame, offset + len, 0);
+    return;
+}
+
+void handle_tracee_stdout(FD *fd, struct pollfd *event)
+{
+    printf("--------STDIO DATA START -----------------------\n");  
+    PROCESS *proc = fd->proc; 
+    if(proc == NULL)
+    {
+        // delete this fd 
+        return;
+    }
+
+    int buffer_size = 2024;
+    char buffer[buffer_size];
+
+    if(event->revents & (POLLERR | POLLHUP))
+    {
+        // TODO: send alert through ws_fd
+        printf("READ: STDOUT POLLERR - deleting\n");
+        tracee_stdout_fd_cleanup(fd);
+        return;
+    }
+
+    int bytes_read = read(fd->sys_fd, buffer, buffer_size - 1);
+    if(bytes_read == -1)
+    {
+        // TODO: send alert through ws_fd
+        printf("READ: STDOUT ERROR - deleting\n");
+        tracee_stdout_fd_cleanup(fd);
+        return;
+    }
+
+    buffer[bytes_read + 1] = '\0';
+    JSON *resp = json_init("empty", NULL);  
+    if(resp == NULL)    
+    {   
+        fprintf(stderr, "could not allocate memory for response json.\n"); 
+        return; 
+    }  
+    cJSON_AddNumberToObject(resp, "actid", PROC_STDOUT);
+    JSON *resp_ = json_init("empty", NULL); 
+    if(resp_ == NULL)   
+    {   
+        printf("could not allocate memory for response data\n"); 
+        json_delete(resp);  
+        return;  
+    }   
+    cJSON_AddItemToObject(resp, "resp", resp_); 
+    cJSON_AddStringToObject(resp_, "output", buffer);
+    char *resp_str = cJSON_PrintUnformatted(resp); 
+    printf("%s\n", resp_str);  
+    printf("--------STDIO DATA END -----------------------\n");  
+    ws_send(proc->ws_fd, resp_str, strlen(resp_str));
+    json_delete(resp);  
+}
+
 
 
 void handle_connected_fd(FD *fd, struct pollfd *event)
@@ -208,28 +291,8 @@ void handle_connected_fd(FD *fd, struct pollfd *event)
         if(resp_str == NULL) resp_str = "something went wrong";
         uint64_t resp_length = strlen(resp_str);
 
-
-        // Echo the message back
-        unsigned char response_frame[BUFFER_SIZE];
-        response_frame[0] = 0x81; // FIN bit set and text frame opcode (0x1)
-        if (resp_length <= 125) {
-            response_frame[1] = (unsigned char)resp_length;
-            offset = 2;
-        } else if (resp_length <= 65535) {
-            response_frame[1] = 126;
-            *(uint16_t *)(response_frame + 2) = htons((uint16_t)resp_length);
-            offset = 4;
-        } else {
-            response_frame[1] = 127;
-            *(uint64_t *)(response_frame + 2) = htobe64(resp_length);
-            offset = 10;
-        }
-        fprintf(stdout, "Sending Back Payload\n");
-        memcpy(response_frame + offset, resp_str, resp_length);
-        send(client_socket, response_frame, offset + resp_length, 0);
-        // if(resp_str != NULL) free(resp_str);
+        ws_send(fd->sys_fd, resp_str, resp_length);
     } 
-
 }
 
 
@@ -289,7 +352,20 @@ int connected_fd_init(int sys_fd)
     FD *fd = fd_init(sys_fd, &handle_connected_fd);
 
     if(fd == NULL) return -1;
-    if(add_fd_to_tables(fd) == -1) return -1;
+    if(fd_add_to_tables(fd) == -1) return -1;
+
+    init_ws_conn(sys_fd);
+    return 0;
+}
+
+int tracee_stdout_fd_init(int sys_fd, PROCESS *proc)
+{
+    FD *fd = fd_init(sys_fd, &handle_tracee_stdout);
+
+    if(fd == NULL) return -1;
+    fd->proc = proc;
+
+    if(fd_add_to_tables(fd) == -1) return -1;
 
     init_ws_conn(sys_fd);
     return 0;
@@ -301,7 +377,7 @@ void handle_listening_fd(FD *fd, struct pollfd *event)
     {
         perror("handle listening fd");
         exit(EXIT_FAILURE);
-        // rm_fd_from_tables(fd);
+        // fd_rm_from_tables(fd);
         // fd_del(fd);
         return;
     }
@@ -356,9 +432,9 @@ void sock_main_init()
         exit(EXIT_FAILURE);
     }
 
-    if(add_fd_to_tables(fd_obj) == -1)
+    if(fd_add_to_tables(fd_obj) == -1)
     {
-        perror("sock_main_init: add_fd_to_tables");
+        perror("sock_main_init: fd_add_to_tables");
         close(sys_fd);
         exit(EXIT_FAILURE);
     }
@@ -367,11 +443,16 @@ void sock_main_init()
     return;
 }
 
-void main_io()
+
+void fds_setup()
 {
     fd_tables_init();
     idx_arr_init(fds_free_list, MAX_IO_ENTITIES);
+}
 
+void fds_poll()
+{
+    fds_setup();
     sock_main_init();
     cdb_main = cdb_init();
 
