@@ -68,15 +68,26 @@
                 </button>
             </div>
             <div >
-                <label for="message" class="block mb-2 text-sm font-medium text-gray-900 ">Server Response</label>
                 <textarea id="svrMsgResp" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 " 
                     placeholder=" server response"></textarea>
             </div>
         </div>
-        <div class="col-span-7">
-            <div class="border rounded p-1">
-                <h3 class="mb-2">Memory</h3>
-                <div id="mem-view"></div>
+        <div class="col-span-7"
+            x-data="{view: 'source'}">
+            <div class="">
+                <nav class="mb-2 flex border-b">
+                    <div><button @click="view='memory'" 
+                        class="mr-4 py-1 px-2 rounded" :class="view == 'memory' ? 'border border-b-0' : '' " >Memory</button></div>
+                    <div><button @click="view='source'" 
+                        class="py-1 px-2 rounded" :class="view == 'source' ? 'border border-b-0' : '' " >Source</button></div>
+                </nav>
+                <div class="border rounded p-1">
+                    <div x-show="view == 'memory'" x-transition id="mem-view"></div>
+                    <div x-show="view == 'source'" x-transition>
+                        <!-- source view data -->
+                        <textarea class="bg-gray-200 p-2 w-[100%] text-black" name="" id="viewer" rows="20"></textarea>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="col-span-3">
@@ -513,6 +524,105 @@
             }
 
         }
+
+
+
+        class Viewer 
+        {
+            constructor(id) 
+            {
+                this.view       = document.getElementById(id);
+                this.view.value = 'Hello friend';
+                
+                const computedStyle = window.getComputedStyle(this.view);
+                this.lineHeight     = parseInt(computedStyle.lineHeight);
+                this.paddingTop     = parseInt(computedStyle.paddingTop);
+                this.paddingLeft    = parseInt(computedStyle.paddingLeft);
+                this.borderTop      = parseInt(computedStyle.borderTopWidth);
+                this.borderLeft     = parseInt(computedStyle.borderLeftWidth);
+
+                this.container = document.createElement('div');
+                this.container.style.position   = 'relative';
+                this.container.style.display    = 'flex';
+                this.container.style.overflowY  = 'hidden';
+                this.container.style.width      = '100%';
+                this.view.parentNode.insertBefore(this.container, this.view);
+                this.container.appendChild(this.view);
+
+                this.lineNumbers = document.createElement('div');
+                this.lineNumbers.style.position     = 'absolute';
+                this.lineNumbers.style.top          = '0';
+                this.lineNumbers.style.left         = '0';
+                this.lineNumbers.style.width        = '30px';
+                this.lineNumbers.style.height       = '100%';
+                this.lineNumbers.style.overflow     = 'hidden';
+                this.lineNumbers.style.fontFamily   = computedStyle.fontFamily;
+                this.lineNumbers.style.fontSize     = computedStyle.fontSize;
+                this.lineNumbers.style.lineHeight   = computedStyle.lineHeight;
+                this.lineNumbers.style.textAlign    = 'right';
+                this.lineNumbers.style.paddingRight = '5px';
+                this.lineNumbers.style.paddingTop   = `${this.paddingTop}px`;
+                this.lineNumbers.style.boxSizing    = 'border-box';
+                this.lineNumbers.style.color        = '#999';
+                this.lineNumbers.style.backgroundColor = '#f0f0f0';
+                this.container.insertBefore(this.lineNumbers, this.view);
+
+                this.view.style.marginLeft  = '30px';
+                this.view.style.width       = 'calc(100% - 30px)';
+                this.view.style.resize      = 'vertical';
+                this.view.style.border = 'none';
+                this.view.style.outline = 'none';
+
+                this.highlightDiv = document.createElement('div');
+                this.highlightDiv.style.position        = 'absolute';
+                this.highlightDiv.style.pointerEvents   = 'none';
+                // this.highlightDiv.style.backgroundColor = 'yellow';
+                this.highlightDiv.style.opacity         = '0.5';
+                this.highlightDiv.style.border          = '1px solid green';
+                this.container.appendChild(this.highlightDiv);
+                
+                document.addEventListener('selectionchange', () => this.updateHighlightFromCursor());
+                this.view.addEventListener('input', () => this.updateLineNumbers());
+                this.view.addEventListener('scroll', () => this.syncScroll());
+                
+                this.updateLineNumbers();
+                this.updateHighlightFromCursor();
+            }
+
+            updateHighlight(rowNumber) 
+            {
+                const textareaRect = this.view.getBoundingClientRect();
+                this.highlightDiv.style.left    = '30px';
+                this.highlightDiv.style.width   = (textareaRect.width ) + 'px';
+                this.highlightDiv.style.height  = this.lineHeight + 'px';
+                this.highlightDiv.style.top     = (this.paddingTop + this.borderTop + (rowNumber - 1) 
+                                                        * this.lineHeight - this.view.scrollTop) + 'px';
+            }
+
+            updateHighlightFromCursor() 
+            {
+                const cursorPosition    = this.view.selectionStart;
+                const textBeforeCursor  = this.view.value.substring(0, cursorPosition);
+                const currentRow        = (textBeforeCursor.match(/\n/g) || []).length + 1;
+                this.updateHighlight(currentRow);
+            }
+
+            updateLineNumbers() 
+            {
+                const lines = this.view.value.split('\n');
+                this.lineNumbers.innerHTML = lines.map((_, index) => 
+                    `<div>${index + 1}</div>`
+                ).join('');
+                this.syncScroll();
+            }
+
+            syncScroll() 
+            {
+                this.lineNumbers.style.top = `-${this.view.scrollTop}px`;
+            }
+        }
+
+        const view = new Viewer('viewer');
     </script>
 </body>
 </html>
