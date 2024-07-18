@@ -142,7 +142,7 @@ int _trace_proc_cont(pid_t pid)
         printf("(exited) could not continue\n");
         return -1;
     }
-    print_stack_frames(pid);
+    // print_stack_frames(pid);
 
     
     return 0;
@@ -245,15 +245,23 @@ int _trace_proc_step_single(pid_t pid)
     return 0;
 }
 
-struct user_regs_struct *_trace_proc_get_regs(pid_t pid)
+struct user_regs_struct _trace_proc_get_regs(pid_t pid)
 {
-    struct user_regs_struct *regs = 
-        (struct user_regs_struct *)malloc(sizeof(struct user_regs_struct));
-    if(regs == NULL) return NULL;
-    if(ptrace(PTRACE_GETREGS, pid, NULL, regs) == -1)
+    struct user_regs_struct regs;
+    if(ptrace(PTRACE_GETREGS, pid, NULL, &regs) == -1)
     {
-        free(regs);
-        return NULL;
+        memset(&regs, 0, sizeof(struct user_regs_struct));
+    }
+    return regs;
+}
+
+struct user_regs_struct _trace_proc_get_regs_n(pid_t pid)
+{
+    struct user_regs_struct regs;
+    if(ptrace(PTRACE_GETREGS, pid, NULL, &regs) == -1)
+    {
+        fprintf(stderr, "_trace_proc_get_regs_n: getregs failed\n");
+        memset(&regs, 0, sizeof(struct user_regs_struct));
     }
     return regs;
 }

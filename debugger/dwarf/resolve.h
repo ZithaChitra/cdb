@@ -5,7 +5,7 @@
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 
-typedef struct FUNC_INFO{
+typedef struct FUNCINFO{
     Dwarf_Signed    linecount;
     Dwarf_Unsigned  lineno;
     Dwarf_Addr      pc;
@@ -13,11 +13,24 @@ typedef struct FUNC_INFO{
     Dwarf_Addr      high_pc;
     char            *filename;
     char            *func_name;
-} FUNC_INFO;
+} FUNCINFO;
 
-FUNC_INFO *func_info_init();
-void func_info_print(FUNC_INFO *f_info);
-FUNC_INFO **func_find_all(Dwarf_Debug dbg, int *total);
+
+typedef struct LINEINFO
+{
+    char         *filename;
+    unsigned int line_number;
+} LINEINFO;
+
+
+FUNCINFO *func_info_init();
+LINEINFO get_file_line_from_address(
+        Dwarf_Debug dbg, 
+        Dwarf_Addr absolute_address, 
+        Dwarf_Addr base_address);
+void func_info_print(FUNCINFO *f_info);
+FUNCINFO **func_find_all(Dwarf_Debug dbg, int *total);
 int func_info_read_from_die(Dwarf_Debug dbg, Dwarf_Die die, 
-    FUNC_INFO **func_info);
+    FUNCINFO **func_info);
+
 #endif

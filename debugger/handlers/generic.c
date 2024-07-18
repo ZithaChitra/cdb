@@ -11,7 +11,7 @@
 #include "cdb.h"
 #include "json.h"
 #include "trace.h"
-#include "resolve.h"
+#include "dwarf/resolve.h"
 #include "fd.h"
 #include "data/hashmap.h"
 
@@ -150,38 +150,35 @@ ACT_HANDLR_END
 
 ACT_HANDLR_START(proc_regs_read)
     if(!proc_exists) return -1;
-    struct user_regs_struct *regs = _trace_proc_get_regs(pid->valueint);
-    if(regs == NULL) goto failure;
+    struct user_regs_struct regs = _trace_proc_get_regs(pid->valueint);
     JSON *regs_json = json_init("empty", NULL);
     if(regs_json == NULL)
     {
         printf("could not allocate memory for response\n");
-        free(regs);
         goto failure;
     }
 
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rip", regs->rip);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rsp", regs->rsp);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rbp", regs->rbp);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rax", regs->rax);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rbx", regs->rbx);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rcx", regs->rcx);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rdx", regs->rdx);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rsi", regs->rsi);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "rdi", regs->rdi);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r8",  regs->r8);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r9",  regs->r9);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r10", regs->r10);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r11", regs->r11);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r12", regs->r12);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r13", regs->r13);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r14", regs->r14);
-    cJSON_AddNumberToObject((cJSON *)regs_json, "r15", regs->r15);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rip", regs.rip);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rsp", regs.rsp);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rbp", regs.rbp);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rax", regs.rax);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rbx", regs.rbx);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rcx", regs.rcx);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rdx", regs.rdx);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rsi", regs.rsi);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "rdi", regs.rdi);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r8",  regs.r8);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r9",  regs.r9);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r10", regs.r10);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r11", regs.r11);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r12", regs.r12);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r13", regs.r13);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r14", regs.r14);
+    cJSON_AddNumberToObject((cJSON *)regs_json, "r15", regs.r15);
 
     cJSON_AddNumberToObject(resp_, "pid", pid->valueint);
     cJSON_AddItemToObject((cJSON *)resp_, "regs", regs_json);
 
-    free(regs);
 ACT_HANDLR_END
 
 int proc_regs_write(CDB *cdb, JSON *args, char **resp_str)
@@ -289,14 +286,27 @@ ACT_HANDLR_START(proc_mem_write)
     return proc_mem_read(cdb, args, resp_str);
 ACT_HANDLR_END
 
-int proc_step_single(CDB *cdb, JSON *args, char **resp_str)
-{
+ACT_HANDLR_START(proc_step_single)
     printf("handler: proc_step_single");
-    JSON *pid = json_get_value(args, "pid");
-    if(pid == NULL) return -1;
-    if (_trace_proc_step_single(pid->valueint) == -1) return -1;
-    return proc_regs_read(cdb, args, resp_str);
-}
+    if(!proc_exists) goto failure;
+    PROCESS *proc = cdb_find_proc(cdb, pid->valueint);
+    if(proc == NULL)  
+    {
+        printf("process object not found\n");
+        goto failure;
+    }
+
+    if (_trace_proc_step_single(pid->valueint) == -1) 
+        goto failure;
+
+    if(proc_get_curr_state(proc, NULL) == -1)
+        goto failure;
+
+    JSON *state = proc_state_to_json(proc);
+    if(state == NULL) goto failure;
+
+    cJSON_AddItemToObject(resp_, "proc_state", state);
+ACT_HANDLR_END
 
 ACT_HANDLR_START(proc_func_all)
     printf("-------------------------------\n");
@@ -310,7 +320,7 @@ ACT_HANDLR_START(proc_func_all)
     }
     
     int funcs_total;
-    FUNC_INFO **funcs = func_find_all(proc->dw_dbg, &funcs_total);
+    FUNCINFO **funcs = func_find_all(proc->dw_dbg, &funcs_total);
     
     printf("total functions: %d\n", funcs_total);
     if(funcs == NULL) goto failure;
@@ -324,7 +334,7 @@ ACT_HANDLR_START(proc_func_all)
     }
     for (size_t i = 0; i < funcs_total; i++)
     {
-        FUNC_INFO *func_info = *(funcs + i);
+        FUNCINFO *func_info = *(funcs + i);
         if(func_info == NULL) continue;
         func_info_print(func_info);
         JSON *func = json_init("empty", NULL);
@@ -359,9 +369,7 @@ ACT_HANDLR_START(proc_break)
     printf("----------------\n");
     long og_code = _trace_proc_break(pid->valueint, addr);
     if(og_code == -1)
-    {
         goto failure;
-    }
 
     int index = proc_add_breakp(proc, &addr, og_code);
     cJSON_AddStringToObject(args, "read_address", break_addr->valuestring);
@@ -370,7 +378,6 @@ ACT_HANDLR_START(proc_break)
     json_delete(resp);
     return proc_mem_read(cdb, args, resp_str);
 ACT_HANDLR_END
-
 
 
 ACT_HANDLR_START(proc_cont)
@@ -382,14 +389,12 @@ ACT_HANDLR_START(proc_cont)
     {
         goto failure;
     }
-    struct user_regs_struct *regs = _trace_proc_get_regs(pid->valueint);
-    if(regs == NULL) goto failure;
+    struct user_regs_struct regs = _trace_proc_get_regs(pid->valueint);
 
-    regs->rip -= 1;
-    unsigned long long rip = regs->rip;
-    if (_trace_proc_set_regs(pid->valueint, regs) == -1)
+    regs.rip -= 1;
+    unsigned long long rip = regs.rip;
+    if (_trace_proc_set_regs(pid->valueint, &regs) == -1)
     {
-        free(regs);
         goto failure;
     }
     
@@ -403,15 +408,20 @@ ACT_HANDLR_START(proc_cont)
 
     if(bp)
     {
-        if(_trace_proc_rm_break(pid->valueint, bp->addr, bp->og_code) == 1)
+        if(_trace_proc_rm_break(pid->valueint, bp->addr, bp->og_code) == -1)
         {
             printf("could not write to trace mem\n");
         }
     }
 
-    cJSON_AddStringToObject(resp_, "bp_ip", addr);
-    cJSON_AddStringToObject(resp_, "og_code", ogcode_str);
-    free(regs);
+    if(proc_get_curr_state(proc, &regs) == -1)
+        goto failure;
+
+    JSON *state = proc_state_to_json(proc);
+    if(state == NULL)
+        goto failure;
+
+    cJSON_AddItemToObject(resp_, "proc_state", state);
 ACT_HANDLR_END
 
 int no_action()

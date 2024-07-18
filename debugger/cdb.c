@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <sys/user.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include "cdb.h"
 #include "data/hashmap.h"
 #include "data/list.h"
+#include "dwarf/resolve.h"
 
 
 extern HANDLER_CDB action_handlers[];
@@ -34,6 +36,73 @@ PROCESS *proc_init(pid_t pid, int ws_fd)
     proc->dw_dbg    = 0;
     return proc;
 }
+
+
+int proc_get_curr_state(PROCESS *proc, struct user_regs_struct *regs)
+{
+    if(proc == NULL) return -1;
+    if(regs == NULL)
+    {
+        proc->curr_state.regs = _trace_proc_get_regs_n(proc->pid);
+    }else{
+        proc->curr_state.regs = *regs;
+    }
+    proc->curr_state.line_info = get_file_line_from_address(
+                                        proc->dw_dbg, 
+                                        proc->curr_state.regs.rip, 
+                                        proc->base_addr);
+    return 0;
+}
+
+JSON *proc_state_to_json(PROCESS *proc)
+{
+    if(proc == NULL) return NULL;
+    JSON *state = json_init("empty", NULL);
+    if(state == NULL) return NULL;
+    
+    JSON *regs_obj = json_init("empty", NULL);
+    if(regs_obj == NULL)
+    {
+        json_delete(state);
+        return NULL;
+    }
+
+    JSON *line_info_obj = json_init("empty", NULL);
+    if(line_info_obj == NULL)
+    {
+        json_delete(state);
+        json_delete(regs_obj);
+        return NULL;
+    }
+
+
+    cJSON_AddStringToObject(line_info_obj, "filename", proc->curr_state.line_info.filename);
+    cJSON_AddNumberToObject(line_info_obj, "line_number", proc->curr_state.line_info.line_number);
+    
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rip", proc->curr_state.regs.rip);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rsp", proc->curr_state.regs.rsp);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rbp", proc->curr_state.regs.rbp);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rax", proc->curr_state.regs.rax);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rbx", proc->curr_state.regs.rbx);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rcx", proc->curr_state.regs.rcx);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rdx", proc->curr_state.regs.rdx);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rsi", proc->curr_state.regs.rsi);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "rdi", proc->curr_state.regs.rdi);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r8",  proc->curr_state.regs.r8);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r9",  proc->curr_state.regs.r9);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r10", proc->curr_state.regs.r10);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r11", proc->curr_state.regs.r11);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r12", proc->curr_state.regs.r12);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r13", proc->curr_state.regs.r13);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r14", proc->curr_state.regs.r14);
+    cJSON_AddNumberToObject((cJSON *)regs_obj, "r15", proc->curr_state.regs.r15);
+
+    cJSON_AddItemToObject(state, "line_info", line_info_obj);
+    cJSON_AddItemToObject(state, "regs", regs_obj);
+
+    return state;
+}
+
 
 void proc_delete(PROCESS *proc)
 {

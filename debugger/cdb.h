@@ -5,13 +5,21 @@
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 #include <stdio.h>
+#include <sys/user.h>
 #include "json.h"
 #include "data/hashmap.h"
 #include "data/list.h"
+#include "dwarf/resolve.h"
 
 #define MAX_PROC        1
 #define ADDR_LEN        100
 #define PROC_BUFF_SIZE  2024
+
+typedef struct procstate
+{
+    LINEINFO line_info;
+    struct user_regs_struct regs;
+} PROCSTATE;
 
 typedef struct process
 {
@@ -22,6 +30,7 @@ typedef struct process
     LIST        list_node;      //  entry in CDB process list
     void        *proc_buffer;   //  buffer for IO
     HASHMAP     *breaks;        //  break points
+    PROCSTATE   curr_state;
     Dwarf_Debug dw_dbg;         
 } PROCESS;
 
@@ -46,6 +55,8 @@ void proc_delete(PROCESS *proc);
 int proc_add_breakp(PROCESS *proc, void **addr, long og_code);
 BREAKP *proc_find_breakp(PROCESS *proc, void *addr); // find saved bp
 int proc_rm_break(PROCESS *proc, char *addr);
+int proc_get_curr_state(PROCESS *proc, struct user_regs_struct *regs);
+JSON *proc_state_to_json(PROCESS *proc);
 int proc_init_buffer();
 int proc_clear_buffer();
 int proc_delete_buffer();

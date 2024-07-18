@@ -98,7 +98,7 @@
                         x-for="(reg, key) in $store.proc.regs">
                         <div class="grid grid-cols-6">
                             <p class="col-span-2" x-text="key"></p>
-                            <p class="col-span-4 border" @click="btn_insert_break(key)" x-text="reg"></p>
+                            <p class="col-span-4 border" @click="btn_insert_break(key)" x-text="reg.toString(16).toUpperCase().padStart(16, '0')"></p>
                         </div>
                 </template>
                 </div>
@@ -121,6 +121,100 @@
     </div>
 
     <script>
+        class Viewer 
+        {
+            constructor(id) 
+            {
+                this.view       = document.getElementById(id);
+                this.view.value = 'Hello friend';
+                
+                const computedStyle = window.getComputedStyle(this.view);
+                this.lineHeight     = parseInt(computedStyle.lineHeight);
+                this.paddingTop     = parseInt(computedStyle.paddingTop);
+                this.paddingLeft    = parseInt(computedStyle.paddingLeft);
+                this.borderTop      = parseInt(computedStyle.borderTopWidth);
+                this.borderLeft     = parseInt(computedStyle.borderLeftWidth);
+
+                this.container = document.createElement('div');
+                this.container.style.position   = 'relative';
+                this.container.style.display    = 'flex';
+                this.container.style.overflowY  = 'hidden';
+                this.container.style.width      = '100%';
+                this.view.parentNode.insertBefore(this.container, this.view);
+                this.container.appendChild(this.view);
+
+                this.lineNumbers = document.createElement('div');
+                this.lineNumbers.style.position     = 'absolute';
+                this.lineNumbers.style.top          = '0';
+                this.lineNumbers.style.left         = '0';
+                this.lineNumbers.style.width        = '30px';
+                this.lineNumbers.style.height       = '100%';
+                this.lineNumbers.style.overflow     = 'hidden';
+                this.lineNumbers.style.fontFamily   = computedStyle.fontFamily;
+                this.lineNumbers.style.fontSize     = computedStyle.fontSize;
+                this.lineNumbers.style.lineHeight   = computedStyle.lineHeight;
+                this.lineNumbers.style.textAlign    = 'right';
+                this.lineNumbers.style.paddingRight = '5px';
+                this.lineNumbers.style.paddingTop   = `${this.paddingTop}px`;
+                this.lineNumbers.style.boxSizing    = 'border-box';
+                this.lineNumbers.style.color        = '#999';
+                this.lineNumbers.style.backgroundColor = '#f0f0f0';
+                this.container.insertBefore(this.lineNumbers, this.view);
+
+                this.view.style.marginLeft  = '30px';
+                this.view.style.width       = 'calc(100% - 30px)';
+                this.view.style.resize      = 'vertical';
+                this.view.style.border = 'none';
+                this.view.style.outline = 'none';
+
+                this.highlightDiv = document.createElement('div');
+                this.highlightDiv.style.position        = 'absolute';
+                this.highlightDiv.style.pointerEvents   = 'none';
+                // this.highlightDiv.style.backgroundColor = 'yellow';
+                this.highlightDiv.style.opacity         = '0.5';
+                this.highlightDiv.style.border          = '1px solid green';
+                this.container.appendChild(this.highlightDiv);
+                
+                document.addEventListener('selectionchange', () => this.updateHighlightFromCursor());
+                this.view.addEventListener('input', () => this.updateLineNumbers());
+                this.view.addEventListener('scroll', () => this.syncScroll());
+                
+                this.updateLineNumbers();
+                this.updateHighlightFromCursor();
+            }
+
+            updateHighlight(rowNumber) 
+            {
+                const textareaRect = this.view.getBoundingClientRect();
+                this.highlightDiv.style.left    = '30px';
+                this.highlightDiv.style.width   = (textareaRect.width ) + 'px';
+                this.highlightDiv.style.height  = this.lineHeight + 'px';
+                this.highlightDiv.style.top     = (this.paddingTop + this.borderTop + (rowNumber - 1) 
+                                                        * this.lineHeight - this.view.scrollTop) + 'px';
+            }
+
+            updateHighlightFromCursor(row = null) 
+            {
+                const cursorPosition    = this.view.selectionStart;
+                const textBeforeCursor  = this.view.value.substring(0, cursorPosition);
+                const currentRow        = (textBeforeCursor.match(/\n/g) || []).length + 1;
+                this.updateHighlight(row ? row : currentRow);
+            }
+
+            updateLineNumbers() 
+            {
+                const lines = this.view.value.split('\n');
+                this.lineNumbers.innerHTML = lines.map((_, index) => 
+                    `<div>${index + 1}</div>`
+                ).join('');
+                this.syncScroll();
+            }
+
+            syncScroll() 
+            {
+                this.lineNumbers.style.top = `-${this.view.scrollTop}px`;
+            }
+        }
         const svrMsgInput   = document.getElementById('svrMsgInput');
         const svrMsgResp    = document.getElementById('svrMsgResp');
         const pidInput      = document.getElementById('pidInput');
@@ -134,6 +228,7 @@
         const allFuncsBtn   = document.getElementById('allFuncsBtn');
         const breakBtn      = document.getElementById('breakBtn');
         const connIcon      = document.getElementById('connIcon');
+        const view = new Viewer('viewer');
 
         const actions = {
             PROC_START_DBG          : 0,                // - 0
@@ -170,6 +265,7 @@
 
         let isConnected     = false;
         let proc = {};
+        const files = { };
 
         document.addEventListener('alpine:init', () => {
             console.log('alpine initiatedc');
@@ -316,10 +412,32 @@
                 send_req(actions.PROC_STEP_SINGLE);
                 return;
             }  
-            if('resp' in event && 'regs' in event['resp'])
+            if('resp' in event && 'proc_state' in event['resp'])
             {
+                
                 console.log('handling new regs');
-                proc.regs = event['resp']['regs'];
+                // proc.regs = event['resp']['regs'];
+
+                const state = event['resp']['proc_state'];
+                const regs  = state['regs'];
+                proc.regs = regs;
+                const line_info = state['line_info'];
+
+                if((line_info['filename'] in files))
+                {
+                    /*
+                        TODO:
+                        - update global state registers
+                        - check if the view is already displaying this
+                            file and just update the cursor
+                        - request src file from server if we dont have
+                            it on the front-end 
+                    */
+                    view.view.value = files[line_info['filename']];
+                    view.updateLineNumbers();
+                    view.updateHighlightFromCursor(parseInt(line_info['line_number']));
+                    console.log(view);
+                }
             }
         }
 
@@ -459,7 +577,7 @@
             }else{
                 console.log("invalid args");
             }
-        }
+        }view
 
         function proc_func_single()
         {
@@ -509,120 +627,37 @@
 
 
 
-
         function proc_cont(event = null)
         {
-            console.log("calling func: proc_cont");
             if(!event)
             {
                 send_req(actions.PROC_CONT);
                 return;
             }
-            if('resp' in event && 'mem' in event['resp'])
+            if('resp' in event && 'proc_state' in event['resp'])
             {
+                const state = event['resp']['proc_state'];
+                const regs  = state['regs'];
+                proc.regs = regs;
+                const line_info = state['line_info'];
 
-            }
-
-        }
-
-
-
-        class Viewer 
-        {
-            constructor(id) 
-            {
-                this.view       = document.getElementById(id);
-                this.view.value = 'Hello friend';
-                
-                const computedStyle = window.getComputedStyle(this.view);
-                this.lineHeight     = parseInt(computedStyle.lineHeight);
-                this.paddingTop     = parseInt(computedStyle.paddingTop);
-                this.paddingLeft    = parseInt(computedStyle.paddingLeft);
-                this.borderTop      = parseInt(computedStyle.borderTopWidth);
-                this.borderLeft     = parseInt(computedStyle.borderLeftWidth);
-
-                this.container = document.createElement('div');
-                this.container.style.position   = 'relative';
-                this.container.style.display    = 'flex';
-                this.container.style.overflowY  = 'hidden';
-                this.container.style.width      = '100%';
-                this.view.parentNode.insertBefore(this.container, this.view);
-                this.container.appendChild(this.view);
-
-                this.lineNumbers = document.createElement('div');
-                this.lineNumbers.style.position     = 'absolute';
-                this.lineNumbers.style.top          = '0';
-                this.lineNumbers.style.left         = '0';
-                this.lineNumbers.style.width        = '30px';
-                this.lineNumbers.style.height       = '100%';
-                this.lineNumbers.style.overflow     = 'hidden';
-                this.lineNumbers.style.fontFamily   = computedStyle.fontFamily;
-                this.lineNumbers.style.fontSize     = computedStyle.fontSize;
-                this.lineNumbers.style.lineHeight   = computedStyle.lineHeight;
-                this.lineNumbers.style.textAlign    = 'right';
-                this.lineNumbers.style.paddingRight = '5px';
-                this.lineNumbers.style.paddingTop   = `${this.paddingTop}px`;
-                this.lineNumbers.style.boxSizing    = 'border-box';
-                this.lineNumbers.style.color        = '#999';
-                this.lineNumbers.style.backgroundColor = '#f0f0f0';
-                this.container.insertBefore(this.lineNumbers, this.view);
-
-                this.view.style.marginLeft  = '30px';
-                this.view.style.width       = 'calc(100% - 30px)';
-                this.view.style.resize      = 'vertical';
-                this.view.style.border = 'none';
-                this.view.style.outline = 'none';
-
-                this.highlightDiv = document.createElement('div');
-                this.highlightDiv.style.position        = 'absolute';
-                this.highlightDiv.style.pointerEvents   = 'none';
-                // this.highlightDiv.style.backgroundColor = 'yellow';
-                this.highlightDiv.style.opacity         = '0.5';
-                this.highlightDiv.style.border          = '1px solid green';
-                this.container.appendChild(this.highlightDiv);
-                
-                document.addEventListener('selectionchange', () => this.updateHighlightFromCursor());
-                this.view.addEventListener('input', () => this.updateLineNumbers());
-                this.view.addEventListener('scroll', () => this.syncScroll());
-                
-                this.updateLineNumbers();
-                this.updateHighlightFromCursor();
-            }
-
-            updateHighlight(rowNumber) 
-            {
-                const textareaRect = this.view.getBoundingClientRect();
-                this.highlightDiv.style.left    = '30px';
-                this.highlightDiv.style.width   = (textareaRect.width ) + 'px';
-                this.highlightDiv.style.height  = this.lineHeight + 'px';
-                this.highlightDiv.style.top     = (this.paddingTop + this.borderTop + (rowNumber - 1) 
-                                                        * this.lineHeight - this.view.scrollTop) + 'px';
-            }
-
-            updateHighlightFromCursor() 
-            {
-                const cursorPosition    = this.view.selectionStart;
-                const textBeforeCursor  = this.view.value.substring(0, cursorPosition);
-                const currentRow        = (textBeforeCursor.match(/\n/g) || []).length + 1;
-                this.updateHighlight(currentRow);
-            }
-
-            updateLineNumbers() 
-            {
-                const lines = this.view.value.split('\n');
-                this.lineNumbers.innerHTML = lines.map((_, index) => 
-                    `<div>${index + 1}</div>`
-                ).join('');
-                this.syncScroll();
-            }
-
-            syncScroll() 
-            {
-                this.lineNumbers.style.top = `-${this.view.scrollTop}px`;
+                if((line_info['filename'] in files))
+                {
+                    /*
+                        TODO:
+                        - update global state registers
+                        - check if the view is already displaying this
+                            file and just update the cursor
+                        - request src file from server if we dont have
+                            it on the front-end 
+                    */
+                    view.view.value = files[line_info['filename']];
+                    view.updateLineNumbers();
+                    view.updateHighlightFromCursor(parseInt(line_info['line_number']));
+                    console.log(view);
+                }
             }
         }
-
-        const view = new Viewer('viewer');
     </script>
 </body>
 </html>
