@@ -328,6 +328,7 @@ int cdb_remove_proc(CDB *cdb, pid_t pid)
     return 0;
 }
 
+
 void cdb_rm_conn_procs(CDB *cdb, int conn_fd)
 {
     if(cdb == NULL) return;

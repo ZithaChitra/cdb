@@ -127,6 +127,9 @@
             {
                 this.view       = document.getElementById(id);
                 this.view.value = 'Hello friend';
+                this.srcFiles   = {};
+                this.currLine   = 0;
+                this.currFileShowing = '';
                 
                 const computedStyle = window.getComputedStyle(this.view);
                 this.lineHeight     = parseInt(computedStyle.lineHeight);
@@ -170,7 +173,6 @@
                 this.highlightDiv = document.createElement('div');
                 this.highlightDiv.style.position        = 'absolute';
                 this.highlightDiv.style.pointerEvents   = 'none';
-                // this.highlightDiv.style.backgroundColor = 'yellow';
                 this.highlightDiv.style.opacity         = '0.5';
                 this.highlightDiv.style.border          = '1px solid green';
                 this.container.appendChild(this.highlightDiv);
@@ -210,6 +212,44 @@
                 this.syncScroll();
             }
 
+            updateFromState(lineInfo)
+            {
+                const {line_number, filename} = lineInfo;
+                this.currLine = parseInt(line_number);
+
+                if(!(filename in this.srcFiles))
+                {
+                    this.currFileShowing = filename;
+                    view_file_get(null, filename);
+                    return;
+                }
+
+                if(filename != this.currFileShowing)
+                {
+                    this.view.value = this.srcFiles[filename];
+                    this.updateLineNumbers();
+                    this.currFileShowing = filename;
+                }
+
+                this.updateHighlightFromCursor(this.currLine);
+                return;
+            }
+
+
+            saveNewSrcFile(filename, data)
+            {
+                if(filename && data)
+                {
+                    this.srcFiles[filename] = data;
+                    if(filename == this.currFileShowing)
+                    {
+                        this.view.value = this.srcFiles[filename];
+                        this.updateLineNumbers();
+                        this.updateHighlightFromCursor(this.currLine);
+                    }
+                }
+            }
+
             syncScroll() 
             {
                 this.lineNumbers.style.top = `-${this.view.scrollTop}px`;
@@ -228,23 +268,25 @@
         const allFuncsBtn   = document.getElementById('allFuncsBtn');
         const breakBtn      = document.getElementById('breakBtn');
         const connIcon      = document.getElementById('connIcon');
+
         const view = new Viewer('viewer');
 
         const actions = {
-            PROC_START_DBG          : 0,                // - 0
-            PROC_END_DBG            : 1,                // - 1
-            PROC_REGS_READ          : 2,                // - 2
-            PROC_REGS_WRITE         : 3,                // - 3
-            PROC_MEM_READ           : 4,                // - 4
-            PROC_MEM_WRITE          : 5,                // - 5
-            PROC_STEP_SINGLE        : 6,                // - 6
-            PROC_FUNC_ALL           : 7,                // - 7
-            PROC_FUNC_SINGLE        : 8,                // - 8
-            PROC_BREAK              : 9,                // - 9         
-            PROC_CONT               : 10,               // - 10    
-            PROC_STDOUT             : 11,
-            PROC_STDIN              : 12,              
-            UNKNOWN_ACTION          : 13,               // - 11
+            PROC_START_DBG          : 0,        //  start debugging
+            PROC_END_DBG            : 1,        // 
+            PROC_REGS_READ          : 2,        //
+            PROC_REGS_WRITE         : 3,        //
+            PROC_MEM_READ           : 4,        //
+            PROC_MEM_WRITE          : 5,        //
+            PROC_STEP_SINGLE        : 6,        //
+            PROC_FUNC_ALL           : 7,        //
+            PROC_FUNC_SINGLE        : 8,        //
+            PROC_BREAK              : 9,        //         
+            PROC_CONT               : 10,       //     
+            PROC_STDOUT             : 11,       // 
+            PROC_STDIN              : 12,       // 
+            FILE_GET                : 13,       // 
+            UNKNOWN_ACTION          : 14,       // 
         }
 
         const msg_handlers = [
@@ -260,12 +302,13 @@
             proc_break,
             proc_cont,
             proc_stdout,
-            proc_stdin
+            proc_stdin,
+            view_file_get,
         ];
 
-        let isConnected     = false;
-        let proc = {};
-        const files = { };
+        let isConnected = false;
+        let proc    = {};
+        const files = {};
 
         document.addEventListener('alpine:init', () => {
             console.log('alpine initiatedc');
@@ -362,6 +405,25 @@
             return hexString;
         }
 
+        // should this be a `View` class member function ?
+        function view_file_get(event = null, path = null)
+        {
+            if(!event)
+            {
+                if(path) send_req(actions.FILE_GET, {"path": path});
+                return;
+            }
+            else
+            {
+                if('resp' in event && 'file' in event['resp'])
+                {
+                    const file = event['resp']['file'];
+                    view.saveNewSrcFile(file['filename'], file['data']);
+                    return;
+                }
+            }
+        }
+
         function send_req(actid, args = {})
         {
             const pid = proc.pid == null ? null : parseInt(proc.pid);
@@ -420,24 +482,10 @@
 
                 const state = event['resp']['proc_state'];
                 const regs  = state['regs'];
-                proc.regs = regs;
+                proc.regs   = regs;
                 const line_info = state['line_info'];
+                view.updateFromState(line_info);
 
-                if((line_info['filename'] in files))
-                {
-                    /*
-                        TODO:
-                        - update global state registers
-                        - check if the view is already displaying this
-                            file and just update the cursor
-                        - request src file from server if we dont have
-                            it on the front-end 
-                    */
-                    view.view.value = files[line_info['filename']];
-                    view.updateLineNumbers();
-                    view.updateHighlightFromCursor(parseInt(line_info['line_number']));
-                    console.log(view);
-                }
             }
         }
 
@@ -640,22 +688,8 @@
                 const regs  = state['regs'];
                 proc.regs = regs;
                 const line_info = state['line_info'];
+                view.updateFromState(line_info);
 
-                if((line_info['filename'] in files))
-                {
-                    /*
-                        TODO:
-                        - update global state registers
-                        - check if the view is already displaying this
-                            file and just update the cursor
-                        - request src file from server if we dont have
-                            it on the front-end 
-                    */
-                    view.view.value = files[line_info['filename']];
-                    view.updateLineNumbers();
-                    view.updateHighlightFromCursor(parseInt(line_info['line_number']));
-                    console.log(view);
-                }
             }
         }
     </script>

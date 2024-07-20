@@ -13,5 +13,9 @@ HANDLER_CDB action_handlers[] = {
     (HANDLER_CDB)proc_func_single,      //  - 8
     (HANDLER_CDB)proc_break,            //  - 9
     (HANDLER_CDB)proc_cont,             //  - 10
+    (HANDLER_CDB)proc_stdout,           //  - 11
+    (HANDLER_CDB)proc_stdin,            //  - 12
+    (HANDLER_CDB)file_get,              //  - 13
     (HANDLER_CDB)no_action,             //  - 11
+
 };

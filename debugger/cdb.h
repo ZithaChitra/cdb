@@ -57,6 +57,7 @@ BREAKP *proc_find_breakp(PROCESS *proc, void *addr); // find saved bp
 int proc_rm_break(PROCESS *proc, char *addr);
 int proc_get_curr_state(PROCESS *proc, struct user_regs_struct *regs);
 JSON *proc_state_to_json(PROCESS *proc);
+
 int proc_init_buffer();
 int proc_clear_buffer();
 int proc_delete_buffer();

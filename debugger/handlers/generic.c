@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/user.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 #include <sys/uio.h>
@@ -138,14 +140,13 @@ int proc_start_dbg(CDB *cdb, JSON *args, char **resp_str)
 }
 
 ACT_HANDLR_START(proc_end_dbg)
-    if(proc_exists == 1)
-    {
-        printf("process already attached\n");
-        if(_trace_proc_cont_kill(pid->valueint) == -1) return -1;
-        if(cdb_remove_proc(cdb, pid->valueint) == -1) return -1;
-        return -1;
-    }
+
+    if(!proc_exists) goto failure;
+    printf("process already attached\n");
     // TODO
+    if(_trace_proc_cont_kill(pid->valueint) == -1) return -1;
+    if(cdb_remove_proc(cdb, pid->valueint) == -1) return -1;
+    return -1;
 ACT_HANDLR_END
 
 ACT_HANDLR_START(proc_regs_read)
@@ -423,6 +424,81 @@ ACT_HANDLR_START(proc_cont)
 
     cJSON_AddItemToObject(resp_, "proc_state", state);
 ACT_HANDLR_END
+
+int proc_stdout(CDB *cdb, JSON *args, char **resp_str)
+{
+    /* 
+        we should never receive this request from the front-end.
+        we (the server) poll the tracee for stdout and send 
+        data when it becomes available, to the front-end.
+    */
+    return 0;
+}
+
+
+ACT_HANDLR_START(proc_stdin)
+
+    (void) proc_exists;
+    // __attribute__((unused)) failure:
+ACT_HANDLR_END
+
+
+ACT_HANDLR_START(file_get)
+    (void) proc_exists;
+    JSON *path = json_get_value(args, "path");
+    if(path == NULL)
+    {
+        fprintf(stderr, "file_get: path not speecified\n");
+        goto failure;
+    }
+    int file = open(path->valuestring, O_RDONLY);
+    if(file == -1)
+    {
+        fprintf(stderr, "file_get: could not open file speecified\n");
+        goto failure;
+    }
+    struct stat st;
+    if(fstat(file, &st) == -1)
+    {
+        fprintf(stderr, "file_get: could not file stat info\n");
+        close(file);
+        goto failure;
+    }
+
+    size_t file_size = st.st_size + 1;
+    char *buffer = (char*)malloc(file_size);
+    if(buffer == NULL)
+    {
+        fprintf(stderr, "file_get: could not allocate buffer for file\n");
+        close(file);
+        goto failure;
+    }
+
+    if(read(file, buffer, file_size - 1) == -1)
+    {
+        fprintf(stderr, "file_get: could not read from file\n");
+        close(file);
+        free(buffer);
+        goto failure;
+    }
+
+    buffer[file_size - 1] = '\0';
+
+    JSON *file_resp = json_init("empty", NULL);
+    if(file_resp == NULL)
+    {
+        fprintf(stderr, "file_get: could not create file_resp obj\n");
+        close(file);
+        free(buffer);
+        goto failure;
+    }
+
+    cJSON_AddStringToObject(file_resp, "filename", path->valuestring);
+    cJSON_AddStringToObject(file_resp, "data", buffer);
+
+    cJSON_AddItemToObject(resp_, "file", file_resp);
+ACT_HANDLR_END
+
 
 int no_action()
 {
